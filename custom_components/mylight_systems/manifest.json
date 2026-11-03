@@ -2,12 +2,12 @@
   "domain": "mylight_systems",
   "name": "MyLight Systems",
   "codeowners": [
-    "@acesyde"
+    "@azman0101"
   ],
   "config_flow": true,
-  "documentation": "https://github.com/acesyde/hassio_mylight_integration",
+  "documentation": "https://github.com/azman0101/hassio_mylight_integration",
   "integration_type": "hub",
   "iot_class": "cloud_polling",
-  "issue_tracker": "https://github.com/acesyde/hassio_mylight_integration/issues",
+  "issue_tracker": "https://github.com/azman0101/hassio_mylight_integration/issues",
   "version": "0.10.0"
 }

@@ -1,5 +1,7 @@
 # MyLight Systems
 
+> Fork mantenido por [azman0101](https://github.com/azman0101/hassio_mylight_integration), basado en el proyecto de [Pierre-Emmanuel Mercier (@acesyde)](https://github.com/acesyde/hassio_mylight_integration). Se conservan la licencia MIT y los créditos originales; véase [NOTICE.md](NOTICE.md).
+
 🌐 [English](README.en.md) | [Français](README.md) | [Português](README.pt.md) | [Deutsch](README.de.md) | **Español**
 
 [![GitHub Release][releases-shield]][releases]
@@ -44,7 +46,7 @@ _Integración para conectar con [MyLight Systems][mylight_systems]._
 
 ## Automática
 
-[![Abra su instancia de Home Assistant y abra un repositorio en el Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=acesyde&repository=hassio_mylight_integration&category=integration)
+[![Abra su instancia de Home Assistant y abra un repositorio en el Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=azman0101&repository=hassio_mylight_integration&category=integration)
 
 ## Manual
 
@@ -96,11 +98,11 @@ Si desea contribuir, lea las [directrices de contribución](CONTRIBUTING.md).
 ---
 
 [mylight_systems]: https://www.mylight-systems.com/
-[commits-shield]: https://img.shields.io/github/commit-activity/y/acesyde/hassio_mylight_integration.svg?style=for-the-badge
-[commits]: https://github.com/acesyde/hassio_mylight_integration/commits/main
+[commits-shield]: https://img.shields.io/github/commit-activity/y/azman0101/hassio_mylight_integration.svg?style=for-the-badge
+[commits]: https://github.com/azman0101/hassio_mylight_integration/commits/main
 [hacs]: https://github.com/hacs/integration
 [hacsbadge]: https://img.shields.io/badge/HACS-Custom-orange.svg?style=for-the-badge
-[license-shield]: https://img.shields.io/github/license/acesyde/hassio_mylight_integration.svg?style=for-the-badge
-[maintenance-shield]: https://img.shields.io/badge/maintainer-Pierre%20Emmanuel%20Mercier%20%40acesyde-blue.svg?style=for-the-badge
-[releases-shield]: https://img.shields.io/github/release/acesyde/hassio_mylight_integration.svg?style=for-the-badge
-[releases]: https://github.com/acesyde/hassio_mylight_integration/releases
+[license-shield]: https://img.shields.io/github/license/azman0101/hassio_mylight_integration.svg?style=for-the-badge
+[maintenance-shield]: https://img.shields.io/badge/maintainer-azman0101-blue.svg?style=for-the-badge
+[releases-shield]: https://img.shields.io/github/release/azman0101/hassio_mylight_integration.svg?style=for-the-badge
+[releases]: https://github.com/azman0101/hassio_mylight_integration/releases
