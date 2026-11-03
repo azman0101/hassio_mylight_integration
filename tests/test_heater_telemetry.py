@@ -12,7 +12,15 @@ from custom_components.mylight_systems.api.const import DEVICES_URL, MEASURES_GR
 from custom_components.mylight_systems.api.exceptions import CommunicationError, UnauthorizedError
 from custom_components.mylight_systems.api.models import Measure, Schedule
 from custom_components.mylight_systems.coordinator import MyLightSystemsDataUpdateCoordinator
-from custom_components.mylight_systems.water_heater import WaterHeaterData, find_meter, parse_power, read_water_heater
+from custom_components.mylight_systems.heater_telemetry import (
+    MeterDiscovery,
+    WaterHeaterData,
+    discover_meter,
+    find_meter,
+    parse_day_energy,
+    parse_power,
+)
+from custom_components.mylight_systems.heater_telemetry import read_water_heater as _read
 
 NOW = datetime(2026, 11, 4, 0, 30, tzinfo=ZoneInfo("Europe/Paris"))
 METER = {
@@ -22,6 +30,11 @@ METER = {
     "masterType": "gmd",
     "masterMac": "parent-001",
 }
+
+
+async def read_water_heater(client, token, now):
+    """Discover then read, as the coordinator does on a cold cache."""
+    return await _read(client, token, now, await discover_meter(client, token, now))
 
 
 def client_fixture(*, energy=None, state=None, schedule=None, devices=None):
@@ -142,7 +155,7 @@ async def test_energy_units_and_zero(unit, value, expected):
     assert (data.energy.value if data.energy else None) == expected
 
 
-@pytest.mark.parametrize("age,expected", [(0, 0), (901, None), (-60, None)])
+@pytest.mark.parametrize("age,expected", [(0, 0), (901, None), (-60, 0), (-301, None)])
 def test_power_freshness_and_zero(age, expected):
     state = {
         "sensorStates": [
@@ -178,12 +191,40 @@ async def test_coordinator_retains_energy_entity_and_isolates_optional_failure(m
     c.authenticate_user = AsyncMock()
     c._MyLightSystemsDataUpdateCoordinator__auth_token = "test-only-token"  # noqa: S105
     monkeypatch.setattr(module.dt_util, "now", lambda: NOW)
+    c.client.async_get_measures_total.return_value = [Measure("water_heater_energy", 9_000_000, "Ws")]
+    discovery = MeterDiscovery(METER, "found", NOW)
+    discover = AsyncMock(return_value=discovery)
     read = AsyncMock(return_value=WaterHeaterData(energy=Measure("energy", 3600, "Ws"), discovery="found"))
+    monkeypatch.setattr(module, "discover_meter", discover)
     monkeypatch.setattr(module, "read_water_heater", read)
-    assert (await c._async_update_data()).water_heater_energy.value == 3600
+    data = await c._async_update_data()
+    # The lifetime total never switches to the daily meter value.
+    assert data.water_heater_energy.value == 9_000_000
+    assert data.water_heater.energy.value == 3600
     assert c.client.async_get_measures_grouping.call_args.kwargs["from_date"] == "2026-11-04"
     read.side_effect = CommunicationError()
-    assert (await c._async_update_data()).water_heater is None
+    data = await c._async_update_data()
+    assert data.water_heater is None
+    assert data.water_heater_energy.value == 9_000_000
+    # Inventory is cached between polls.
+    assert discover.await_count == 1
+
+
+@pytest.mark.asyncio
+async def test_coordinator_rediscovers_after_ttl_and_propagates_auth(monkeypatch):
+    c = object.__new__(MyLightSystemsDataUpdateCoordinator)
+    c.client = AsyncMock()
+    discover = AsyncMock(return_value=MeterDiscovery(None, "not_found", NOW))
+    monkeypatch.setattr(module, "discover_meter", discover)
+    await c._async_read_heater("t", NOW)
+    await c._async_read_heater("t", NOW + timedelta(hours=1))
+    assert discover.await_count == 1
+    await c._async_read_heater("t", NOW + timedelta(hours=25))
+    assert discover.await_count == 2
+    discover.side_effect = UnauthorizedError()
+    c._heater_discovery = None
+    with pytest.raises(UnauthorizedError):
+        await c._async_read_heater("t", NOW)
 
 
 def test_sensor_values_and_attributes_keep_unknown_distinct_from_disabled():
@@ -195,10 +236,18 @@ def test_sensor_values_and_attributes_keep_unknown_distinct_from_disabled():
     assert descriptions["water_heater_green_play"].value_fn(data) is None
     heater = WaterHeaterData(power=0, green_play=Schedule("", "green_play", None, False), fetched_at=NOW)
     data = data._replace(water_heater=heater, water_heater_energy=Measure("energy", 3600, "Ws"))
+    # Not from one identified meter: heater sensors stay unknown.
+    assert descriptions["water_heater_power"].value_fn(data) is None
+    heater.discovery = "found"
+    heater.energy = Measure("energy", 7200, "Ws")
     assert descriptions["water_heater_energy"].value_fn(data) == 1
+    assert descriptions["water_heater_energy_today"].value_fn(data) == 2
     assert descriptions["water_heater_power"].value_fn(data) == 0
     assert descriptions["water_heater_green_play"].value_fn(data) == "disabled"
-    assert descriptions["water_heater_green_play"].attributes_fn(data)["green_play_ranges"] == ""
+    attributes = descriptions["water_heater_green_play"].attributes_fn(data)
+    assert attributes["green_play_ranges"] == ""
+    assert "last_read" not in attributes
+    assert descriptions["water_heater_green_play"].options == ["enabled", "disabled"]
 
 
 @pytest.mark.asyncio
@@ -210,3 +259,64 @@ async def test_malformed_optional_measurements_preserve_program():
     data = await read_water_heater(client, "test-only-token", NOW)
     assert data.energy is None and data.power is None
     assert data.green_play.enabled is False
+
+
+def test_utc_group_date_matches_local_day():
+    energy = {
+        "status": "ok",
+        "measures": [{"date": "2026-11-03T23:00:00Z", "values": [{"type": "energy", "value": 10, "unit": "Ws"}]}],
+    }
+    assert parse_day_energy(energy, "2026-11-04", NOW.tzinfo).value == 10
+    assert parse_day_energy(energy, "2026-11-03", NOW.tzinfo) is None
+
+
+def test_naive_utc_power_timestamp_falls_back_to_utc():
+    # 23:29 UTC naive == 00:29 Paris: stale as local wall time, fresh as UTC.
+    state = {
+        "sensorStates": [
+            {"measure": {"type": "electric_power", "value": 5, "unit": "watt", "date": "2026-11-03 23:29:00"}}
+        ]
+    }
+    power, measured_at = parse_power(state, NOW)
+    assert power == 5
+    assert measured_at.isoformat() == "2026-11-04T00:29:00+01:00"
+
+
+@pytest.mark.asyncio
+async def test_rejected_session_in_raw_reads_raises_unauthorized():
+    client = client_fixture()
+    denied = {"status": "error", "error": "not.authorized"}
+    client.async_raw_request.side_effect = None
+    client.async_raw_request.return_value = denied
+    with pytest.raises(UnauthorizedError):
+        await discover_meter(client, "test-only-token", NOW)
+    with pytest.raises(UnauthorizedError):
+        await _read(client, "test-only-token", NOW, MeterDiscovery(METER, "found", NOW))
+
+
+@pytest.mark.asyncio
+async def test_failed_inventory_is_not_cached_as_not_found():
+    client = AsyncMock()
+    client.async_raw_request.return_value = {"status": "error", "error": "server.error"}
+    with pytest.raises(ValueError):
+        await discover_meter(client, "test-only-token", NOW)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("discovery,created", [("found", True), ("not_found", False), ("ambiguous", False)])
+async def test_heater_sensors_only_created_for_a_single_meter(discovery, created):
+    from custom_components.mylight_systems.coordinator import MyLightSystemsCoordinatorData  # noqa: PLC0415
+    from custom_components.mylight_systems.sensor import async_setup_entry  # noqa: PLC0415
+
+    entry = SimpleNamespace(entry_id="e", data={})
+    coordinator = SimpleNamespace(
+        data=MyLightSystemsCoordinatorData(*([None] * 11), WaterHeaterData(discovery=discovery)),
+        config_entry=entry,
+    )
+    entry.runtime_data = coordinator
+    added = []
+    await async_setup_entry(None, entry, added.extend)
+    keys = {e.entity_description.key for e in added}
+    assert "water_heater_energy" in keys
+    heater_keys = {"water_heater_power", "water_heater_green_play", "water_heater_energy_today"}
+    assert (heater_keys <= keys) is created and (heater_keys & keys == set()) is not created

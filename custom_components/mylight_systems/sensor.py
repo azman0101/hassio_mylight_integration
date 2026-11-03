@@ -22,6 +22,7 @@ from .coordinator import (
     MyLightSystemsDataUpdateCoordinator,
 )
 from .entity import IntegrationMyLightSystemsEntity
+from .heater_telemetry import WaterHeaterData
 from .util.units import ws_to_kwh, ws_to_wh
 
 
@@ -31,6 +32,8 @@ class MyLightSensorEntityDescription(SensorEntityDescription):
 
     value_fn: Callable[[MyLightSystemsCoordinatorData], int | float | str | None]
     attributes_fn: Callable[[MyLightSystemsCoordinatorData], dict] | None = None
+    # Only created when exactly one dedicated water-heater meter was discovered.
+    requires_heater_meter: bool = False
 
 
 def _calculate_grid_returned_energy(data: MyLightSystemsCoordinatorData) -> float | None:
@@ -43,14 +46,23 @@ def _calculate_grid_returned_energy(data: MyLightSystemsCoordinatorData) -> floa
     return result if result > 0 else 0
 
 
+def _heater(data: MyLightSystemsCoordinatorData) -> WaterHeaterData | None:
+    """Return heater observations only when they come from one identified meter."""
+    h = data.water_heater if data is not None else None
+    return h if h is not None and h.discovery == "found" else None
+
+
 def _heater_attributes(data: MyLightSystemsCoordinatorData) -> dict:
-    """Describe provenance without conflating a poll with a measured/decision timestamp."""
+    """Describe provenance without conflating a poll with a measured/decision timestamp.
+
+    The poll time is deliberately not exposed: it changes every update and would
+    make the recorder write a new state row even when nothing else changed.
+    """
     h = data.water_heater
     if h is None:
         return {"discovery": "unavailable"}
     return {
         "discovery": h.discovery,
-        "last_read": h.fetched_at.isoformat() if h.fetched_at else None,
         "power_measured_at": h.measured_at.isoformat() if h.measured_at else None,
         "effective_report_period": h.report_period,
         "green_play_ranges": h.green_play.ranges if h.green_play else None,
@@ -160,18 +172,31 @@ MYLIGHT_SENSORS: tuple[MyLightSensorEntityDescription, ...] = (
         device_class=SensorDeviceClass.POWER,
         state_class=SensorStateClass.MEASUREMENT,
         suggested_display_precision=0,
-        value_fn=lambda data: data.water_heater.power if data.water_heater else None,
+        value_fn=lambda data: h.power if (h := _heater(data)) else None,
         attributes_fn=_heater_attributes,
+        requires_heater_meter=True,
     ),
     MyLightSensorEntityDescription(
         key="water_heater_green_play",
         translation_key="water_heater_green_play",
+        device_class=SensorDeviceClass.ENUM,
+        options=["enabled", "disabled"],
         value_fn=lambda data: (
-            ("enabled" if data.water_heater.green_play.enabled else "disabled")
-            if data.water_heater and data.water_heater.green_play
-            else None
+            ("enabled" if h.green_play.enabled else "disabled") if (h := _heater(data)) and h.green_play else None
         ),
         attributes_fn=_heater_attributes,
+        requires_heater_meter=True,
+    ),
+    MyLightSensorEntityDescription(
+        # Daily counter from the dedicated meter; resets at local midnight.
+        key="water_heater_energy_today",
+        translation_key="water_heater_energy_today",
+        native_unit_of_measurement=UnitOfEnergy.WATT_HOUR,
+        state_class=SensorStateClass.TOTAL_INCREASING,
+        device_class=SensorDeviceClass.ENERGY,
+        suggested_display_precision=2,
+        value_fn=lambda data: ws_to_wh(h.energy.value) if (h := _heater(data)) and h.energy else None,
+        requires_heater_meter=True,
     ),
     MyLightSensorEntityDescription(
         key="water_heater_energy",
@@ -193,6 +218,7 @@ async def async_setup_entry(
 ) -> None:
     """Configure sensor platform."""
     coordinator = entry.runtime_data
+    has_heater_meter = _heater(coordinator.data) is not None
     entities: list[SensorEntity] = [
         MyLightSystemsSensor(
             entry_id=entry.entry_id,
@@ -200,6 +226,7 @@ async def async_setup_entry(
             entity_description=entity_description,
         )
         for entity_description in MYLIGHT_SENSORS
+        if has_heater_meter or not entity_description.requires_heater_meter
     ]
 
     capacity = entry.data.get(CONF_ELECTRIC_POWER_CAPACITY)

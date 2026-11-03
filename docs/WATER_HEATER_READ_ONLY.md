@@ -5,14 +5,22 @@ editing schedules, or switching the heater. Existing switch controls are unchang
 
 ## Entities
 
-- The existing `water_heater_energy` unique-ID suffix is retained. For one explicitly
-  identified water-heater meter it now reads that meter's daily `energy` in Ws
-  and exposes Wh. Its existing default-disabled setting is retained.
+- The existing `water_heater_energy` sensor is unchanged: it always reports the
+  lifetime cumulative total from `measures/total`, keeping its unique ID, meaning,
+  `total_increasing` state class and default-disabled setting. It never switches
+  to the daily value, so long-term statistics and the Energy dashboard stay valid.
+- `water_heater_energy_today` is a new daily counter from the dedicated meter's
+  `energy` (Ws, exposed as Wh). It resets at local midnight.
 - `water_heater_power` exposes fresh `electric_power` in watts. Zero is a valid
   reading; a missing, stale, future-dated or unsupported reading is unknown.
-- `water_heater_green_play` is a sensor, not a switch: `enabled`, `disabled` or
-  unknown. Attributes include raw `green_play_ranges`, `next_command`,
-  `last_read`, `power_measured_at`, `effective_report_period`, and `discovery`.
+- `water_heater_green_play` is an enum sensor, not a switch: `enabled`, `disabled`
+  or unknown. Attributes include raw `green_play_ranges`, `next_command`,
+  `power_measured_at`, `effective_report_period`, and `discovery`. The poll time
+  is not exposed, so the recorder does not write a new row on every update.
+
+The three heater sensors above are only created when exactly one dedicated meter
+is discovered at setup. Installations without one get no always-unknown entities;
+reload the integration after a meter is added.
   A disabled program with empty ranges is valid, not an API failure.
 
 An enabled GreenPlay program does not mean the relay is currently on. An energized
@@ -25,8 +33,9 @@ Discovery requires exactly one `cmp` or `gmd` with `deviceTypeId=water_heater`.
 It does not use a translated name, the last relay, or a hardcoded installation ID.
 With multiple candidate meters, the new observations remain unknown and report
 `discovery=ambiguous`; explicit user selection is deferred to a subsequent change.
-With no supported meter, `discovery=not_found`. A historical aggregate heater
-measure, when provided by the installation, remains a fallback only in that case.
+With no supported meter, `discovery=not_found`. Raw reads check for
+`not.authorized` like the typed client methods, so an expired session triggers
+reauthentication instead of looking like a missing meter.
 
 The meter owns the requested GreenPlay schedule. A `nextCommand` on its explicitly
 linked composite parent (`masterType=gmd`, `masterMac`) is used only when the meter
@@ -42,6 +51,7 @@ from the installation is included in tests or documentation.
 
 The dedicated meter uses `/api/measures/grouping` with `groupType=day` and
 `measureType=one_phase`. The date field must match the requested local day;
+offset-aware group dates are converted to HA local time before comparing;
 missing days and unknown units remain unknown. `one_phase` follows the MyHome
 client for ordinary device charts; other meter schemas require separate fixtures.
 
@@ -52,16 +62,18 @@ handling and grid import/export definitions are outside this PR.
 
 ## Timing and limits
 
-The configured polling interval is unchanged (default 15 minutes). Four optional
-reads are added when a supported heater is found: inventory, daily meter energy,
-states, and GreenPlay schedule. Unsupported installations only need discovery.
+The configured polling interval is unchanged (default 15 minutes). The device
+inventory is cached and re-read at most every 24 hours. Three optional reads run
+per poll when a supported heater is found (daily meter energy, states, GreenPlay
+schedule), in parallel with the core reads rather than after them.
 Optional endpoint failures do not invalidate unrelated global sensors; a rejected
 session still triggers the existing authentication handling.
 
 Measurement time and API-read time are separate. Legacy timestamps without an
-offset are interpreted as HA local wall time, matching MyHome's local parsing;
-this assumption needs confirmation if installations outside that timezone are used.
-Power is rejected beyond max(15 minutes, three device reporting periods).
+offset are interpreted as HA local wall time, matching MyHome's local parsing; if
+that reading is not fresh, UTC is tried as a fallback.
+Power is rejected beyond max(15 minutes, three device reporting periods), and
+readings up to 5 minutes in the future are accepted to tolerate clock skew.
 `nextCommand` is retained as supplied: its timestamp schema and timezone are not
 inferred, and `last_read` is not advertised as the time a decision was made.
 

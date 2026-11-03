@@ -84,6 +84,7 @@
       "grid_returned_energy": { "name": "Total grid returned energy" },
       "water_heater_energy": { "name": "Water heater energy" },
       "electric_power_capacity": { "name": "Subscribed power" },
+      "water_heater_energy_today": { "name": "Water heater energy today" },
       "water_heater_power": { "name": "Water heater power" },
       "water_heater_green_play": {
         "name": "Water heater GreenPlay program",

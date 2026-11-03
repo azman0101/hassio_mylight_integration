@@ -35,7 +35,10 @@ from .const import (
     DOMAIN,
     LOGGER,
 )
-from .water_heater import WaterHeaterData, read_water_heater
+from .heater_telemetry import MeterDiscovery, WaterHeaterData, discover_meter, read_water_heater
+
+# The device inventory rarely changes; re-read it at most this often.
+HEATER_DISCOVERY_TTL = timedelta(hours=24)
 
 
 class MyLightSystemsCoordinatorData(NamedTuple):
@@ -60,6 +63,7 @@ class MyLightSystemsDataUpdateCoordinator(DataUpdateCoordinator[MyLightSystemsCo
     """Class to manage fetching data from the API."""
 
     config_entry: ConfigEntry
+    _heater_discovery: MeterDiscovery | None = None
 
     def __init__(
         self,
@@ -109,21 +113,15 @@ class MyLightSystemsDataUpdateCoordinator(DataUpdateCoordinator[MyLightSystemsCo
             ]
             if master_relay_id is not None:
                 coroutines.append(self.client.async_get_relay_state(auth_token, master_relay_id))
+            # Optional heater telemetry runs alongside the core reads, not after them.
+            coroutines.append(self._async_read_heater(auth_token, now))
 
             results = await asyncio.gather(*coroutines)
             energy_result = results[0]
             total_result = results[1]
             battery_state = results[2]
             master_relay_state = results[3] if master_relay_id is not None else None
-
-            # Optional read-only telemetry must not take down unrelated installation sensors.
-            try:
-                heater = await read_water_heater(self.client, auth_token, now)
-            except UnauthorizedError:
-                raise
-            except MyLightSystemsError, KeyError, TypeError, ValueError:
-                LOGGER.debug("Optional water heater telemetry unavailable")
-                heater = None
+            heater: WaterHeaterData | None = results[-1]
 
             data = MyLightSystemsCoordinatorData(
                 produced_energy=self.find_measure_by_type(energy_result, "produced_energy"),
@@ -136,11 +134,8 @@ class MyLightSystemsDataUpdateCoordinator(DataUpdateCoordinator[MyLightSystemsCo
                 green_energy=self.find_measure_by_type(energy_result, "green_energy"),
                 battery_state=battery_state,
                 master_relay_state=master_relay_state,
-                water_heater_energy=(
-                    heater.energy
-                    if heater is not None and heater.discovery != "not_found"
-                    else self.find_measure_by_type(total_result, "water_heater_energy")
-                ),
+                # Lifetime cumulative total; the dedicated meter's daily value is a separate sensor.
+                water_heater_energy=self.find_measure_by_type(total_result, "water_heater_energy"),
                 water_heater=heater,
             )
 
@@ -172,6 +167,20 @@ class MyLightSystemsDataUpdateCoordinator(DataUpdateCoordinator[MyLightSystemsCo
             raise ConfigEntryAuthFailed(exception) from exception
         except MyLightSystemsError as exception:
             raise UpdateFailed(exception) from exception
+
+    async def _async_read_heater(self, auth_token: str, now: datetime) -> WaterHeaterData | None:
+        """Read optional heater telemetry; failures must not take down core sensors."""
+        try:
+            discovery = self._heater_discovery
+            if discovery is None or now - discovery.discovered_at > HEATER_DISCOVERY_TTL:
+                discovery = await discover_meter(self.client, auth_token, now)
+                self._heater_discovery = discovery
+            return await read_water_heater(self.client, auth_token, now, discovery)
+        except UnauthorizedError:
+            raise
+        except MyLightSystemsError, KeyError, TypeError, ValueError:
+            LOGGER.debug("Optional water heater telemetry unavailable")
+            return None
 
     def _token_needs_refresh(self) -> bool:
         """Return True if the auth token is missing or expires within 60 seconds."""

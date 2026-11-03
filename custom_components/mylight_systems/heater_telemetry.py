@@ -2,6 +2,9 @@
 
 Program ownership follows the meter, not whichever relay was discovered last.
 No control endpoint is used here.
+
+This is a helper module, deliberately not named ``water_heater.py`` so it can
+never be mistaken for Home Assistant's ``water_heater`` entity platform.
 """
 
 from __future__ import annotations
@@ -9,13 +12,25 @@ from __future__ import annotations
 import asyncio
 import math
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta, tzinfo
 from typing import Any
 
 from .api.client import MyLightApiClient
-from .api.const import DEVICES_URL, MEASURES_GROUPING_URL, STATES_URL
+from .api.const import DEVICES_URL, ERR_NOT_AUTHORIZED, MEASURES_GROUPING_URL, STATES_URL
 from .api.exceptions import UnauthorizedError
 from .api.models import Measure, Schedule
+
+# Tolerate small clock differences between the device, the cloud and HA.
+CLOCK_SKEW_TOLERANCE = 300
+
+
+@dataclass
+class MeterDiscovery:
+    """Result of looking for the dedicated meter in the device inventory."""
+
+    meter: dict | None
+    status: str  # "found", "ambiguous" or "not_found"
+    discovered_at: datetime
 
 
 @dataclass
@@ -44,6 +59,12 @@ def _objects(value: Any) -> list[dict]:
     return [item for item in value if isinstance(item, dict)] if isinstance(value, list) else []
 
 
+def _check_auth(response: Any) -> None:
+    """Raise like the typed client methods do when the session was rejected."""
+    if isinstance(response, dict) and response.get("status") == "error" and response.get("error") == ERR_NOT_AUTHORIZED:
+        raise UnauthorizedError()
+
+
 def find_meter(devices: list[dict]) -> tuple[dict | None, str]:
     """Require one explicitly typed meter, independent of names and ordering."""
     candidates = [
@@ -54,6 +75,23 @@ def find_meter(devices: list[dict]) -> tuple[dict | None, str]:
     if len(candidates) != 1:
         return None, "ambiguous" if candidates else "not_found"
     return candidates[0], "found"
+
+
+def _parse_date(value: Any, tz: tzinfo | None) -> list[datetime]:
+    """Return candidate aware datetimes for an API date string.
+
+    Offset-aware dates are unambiguous. Naive legacy dates are local wall-clock
+    time in the MyHome portal, so HA local time is tried first and UTC second.
+    """
+    if not isinstance(value, str):
+        return []
+    try:
+        parsed = datetime.fromisoformat(value)
+    except ValueError:
+        return []
+    if parsed.tzinfo is not None:
+        return [parsed]
+    return [parsed.replace(tzinfo=tz), parsed.replace(tzinfo=UTC)]
 
 
 def parse_power(state: dict, now: datetime) -> tuple[float | None, datetime | None]:
@@ -68,24 +106,37 @@ def parse_power(state: dict, now: datetime) -> tuple[float | None, datetime | No
     measure = readings[0]
     if measure.get("unit") not in ("watt", "W"):
         return None, None
-    try:
-        measured_at = datetime.fromisoformat(measure["date"])
-        if measured_at.tzinfo is None:
-            # Legacy API dates are local wall-clock dates, as in the MyHome portal.
-            measured_at = measured_at.replace(tzinfo=now.tzinfo)
-    except KeyError, ValueError, TypeError:
+    candidates = _parse_date(measure.get("date"), now.tzinfo)
+    if not candidates:
         return None, None
     period = finite_number(state.get("effectiveReportPeriod"))
     max_age = max(900, 3 * (period or 300))
-    age = (now - measured_at).total_seconds()
     power = finite_number(measure.get("value"))
-    return (power if 0 <= age <= max_age else None), measured_at
+    for measured_at in candidates:
+        age = (now - measured_at).total_seconds()
+        if -CLOCK_SKEW_TOLERANCE <= age <= max_age:
+            return power, measured_at.astimezone(now.tzinfo)
+    return None, candidates[0].astimezone(now.tzinfo)
 
 
-def parse_day_energy(energy: Any, day: str) -> Measure | None:
-    """Select the requested day and reject unknown units or malformed values."""
+def _group_day(value: Any, tz: tzinfo | None) -> str | None:
+    """Return the HA-local calendar day an energy group belongs to."""
+    if not isinstance(value, str):
+        return None
+    try:
+        parsed = datetime.fromisoformat(value)
+    except ValueError:
+        return value[:10] if len(value) >= 10 else None
+    if parsed.tzinfo is not None and tz is not None:
+        # A UTC timestamp for local midnight falls on the previous UTC day.
+        parsed = parsed.astimezone(tz)
+    return parsed.date().isoformat()
+
+
+def parse_day_energy(energy: Any, day: str, tz: tzinfo | None = None) -> Measure | None:
+    """Select the requested local day and reject unknown units or malformed values."""
     if isinstance(energy, dict) and energy.get("status") == "ok":
-        groups = [g for g in _objects(energy.get("measures")) if str(g.get("date", ""))[:10] == day]
+        groups = [g for g in _objects(energy.get("measures")) if _group_day(g.get("date"), tz) == day]
         if len(groups) == 1:
             values = [v for v in _objects(groups[0].get("values")) if v.get("type") == "energy"]
             if len(values) == 1:
@@ -96,13 +147,23 @@ def parse_day_energy(energy: Any, day: str) -> Measure | None:
     return None
 
 
-async def read_water_heater(client: MyLightApiClient, token: str, now: datetime) -> WaterHeaterData:
-    """Read optional heater data without compromising the installation's core sensors."""
-    data = WaterHeaterData()
+async def discover_meter(client: MyLightApiClient, token: str, now: datetime) -> MeterDiscovery:
+    """Read the device inventory once; the coordinator caches the result."""
     inventory = await client.async_raw_request("get", DEVICES_URL, {"authToken": token})
+    _check_auth(inventory)
     if not isinstance(inventory, dict) or inventory.get("status") != "ok":
-        return data
-    meter, data.discovery = find_meter(inventory.get("devices", []))
+        # Not a definitive answer: let the caller retry on the next poll.
+        raise ValueError("Device inventory unavailable")
+    meter, status = find_meter(inventory.get("devices", []))
+    return MeterDiscovery(meter, status, now)
+
+
+async def read_water_heater(
+    client: MyLightApiClient, token: str, now: datetime, discovery: MeterDiscovery
+) -> WaterHeaterData:
+    """Read optional heater data without compromising the installation's core sensors."""
+    data = WaterHeaterData(discovery=discovery.status)
+    meter = discovery.meter
     if meter is None:
         return data
     meter_id = meter["id"]
@@ -124,8 +185,9 @@ async def read_water_heater(client: MyLightApiClient, token: str, now: datetime)
     for result in results:
         if isinstance(result, UnauthorizedError):
             raise result
+        _check_auth(result)
     energy, states, schedule = results
-    data.energy = parse_day_energy(energy, today.isoformat())
+    data.energy = parse_day_energy(energy, today.isoformat(), now.tzinfo)
     if isinstance(states, dict) and states.get("status") == "ok":
         matches = [s for s in _objects(states.get("deviceStates")) if s.get("deviceId") == meter_id]
         if len(matches) == 1:
