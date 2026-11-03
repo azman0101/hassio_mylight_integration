@@ -83,7 +83,13 @@
       "battery_state": { "name": "Gespeicherte Batterieenergie" },
       "grid_returned_energy": { "name": "Ins Netz eingespeiste Energie" },
       "water_heater_energy": { "name": "Warmwasserbereiter-Energie" },
-      "electric_power_capacity": { "name": "Vertraglich zugesicherte Leistung" }
+      "electric_power_capacity": { "name": "Vertraglich zugesicherte Leistung" },
+      "water_heater_energy_today": { "name": "Warmwasserbereiter-Energie heute" },
+      "water_heater_power": { "name": "Warmwasserbereiter Leistung" },
+      "water_heater_green_play": {
+        "name": "Warmwasserbereiter GreenPlay-Programm",
+        "state": { "enabled": "Aktiviert", "disabled": "Deaktiviert" }
+      }
     },
     "switch": {
       "master_relay": { "name": "Hauptrelais" }

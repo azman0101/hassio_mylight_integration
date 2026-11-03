@@ -83,7 +83,13 @@
       "battery_state": { "name": "Energia armazenada na bateria" },
       "grid_returned_energy": { "name": "Energia devolvida à rede" },
       "water_heater_energy": { "name": "Energia do aquecedor de água" },
-      "electric_power_capacity": { "name": "Potência contratada" }
+      "electric_power_capacity": { "name": "Potência contratada" },
+      "water_heater_energy_today": { "name": "Energia do aquecedor de água hoje" },
+      "water_heater_power": { "name": "Potência do aquecedor de água" },
+      "water_heater_green_play": {
+        "name": "Programa GreenPlay do aquecedor",
+        "state": { "enabled": "Ativado", "disabled": "Desativado" }
+      }
     },
     "switch": {
       "master_relay": { "name": "Relé principal" }

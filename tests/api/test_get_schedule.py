@@ -103,3 +103,43 @@ async def test_get_schedule__should_return_schedule_when_valid_token(api_client,
     assert response.type == "electric_tariff"
     assert response.category == "custom"
     assert response.enabled is True
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "kind,enabled,ranges",
+    [
+        ("basic", False, "mon 3:15 on;mon 8:0 off"),
+        ("green_play", False, ""),
+        ("green_play", True, "mon 11:0 on;mon 15:30 off;tue 11:0 on;tue 15:30 off"),
+    ],
+)
+async def test_device_schedule_without_category(api_client, aresponses, kind, enabled, ranges):
+    """Real response shapes: category is absent and empty disabled ranges are valid."""
+    url = DEFAULT_BASE_URL + SCHEDULE_URL + f"?authToken=fixture&scheduleType={kind}&deviceId=meter-fixture"
+    mock_get(aresponses, url, {"status": "ok", "schedule": {"type": kind, "ranges": ranges, "enabled": enabled}})
+    schedule = await api_client.async_get_schedule("fixture", kind, device_id="meter-fixture")
+    assert schedule.category is None
+    assert schedule.enabled is enabled and schedule.ranges == ranges
+
+
+@pytest.mark.asyncio
+async def test_device_schedule_requires_id_before_network(api_client):
+    with pytest.raises(ValueError, match="device_id"):
+        await api_client.async_get_schedule("fixture", "green_play")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {"status": "error", "schedule": {"type": "green_play", "ranges": "", "enabled": False}},
+        {"status": "ok", "schedule": {"type": "green_play", "ranges": "", "enabled": "false"}},
+        {"status": "ok", "schedule": None},
+    ],
+)
+async def test_http_200_is_not_sufficient(api_client, aresponses, payload):
+    url = DEFAULT_BASE_URL + SCHEDULE_URL + "?authToken=fixture&scheduleType=green_play&deviceId=meter-fixture"
+    mock_get(aresponses, url, payload)
+    with pytest.raises(MyLightSystemsError):
+        await api_client.async_get_schedule("fixture", "green_play", device_id="meter-fixture")

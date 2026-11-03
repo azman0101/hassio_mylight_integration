@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TypedDict
+from typing import NotRequired, TypedDict
 
 
 class MeasureValueSchema(TypedDict):
@@ -136,7 +136,7 @@ class ScheduleSchema(TypedDict):
 
     ranges: str
     type: str
-    category: str
+    category: NotRequired[str]
     enabled: bool
 
 

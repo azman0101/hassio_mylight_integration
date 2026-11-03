@@ -71,5 +71,5 @@ class Schedule:
 
     ranges: str
     type: str
-    category: str
+    category: str | None
     enabled: bool

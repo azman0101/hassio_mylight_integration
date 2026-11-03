@@ -418,24 +418,39 @@ class MyLightApiClient:
 
         return rooms
 
-    async def async_get_schedule(self, auth_token: str, schedule_type: str) -> Schedule:
-        """Get schedule by type."""
+    async def async_get_schedule(self, auth_token: str, schedule_type: str, device_id: str | None = None) -> Schedule:
+        """Read a device program or the installation-wide electricity tariff."""
+        if schedule_type != "electric_tariff" and not device_id:
+            raise ValueError("A device_id is required for device schedules")
+        params = {"authToken": auth_token, "scheduleType": schedule_type}
+        if device_id is not None:
+            params["deviceId"] = device_id
         response: ScheduleResponseSchema = await self._execute_request(
             "get",
             SCHEDULE_URL,
-            params={"authToken": auth_token, "scheduleType": schedule_type},
+            params=params,
         )
 
         if response["status"] == "error":
             if response.get("error") == ERR_NOT_AUTHORIZED:
                 raise UnauthorizedError()
 
+        if response.get("status") != "ok":
+            raise MyLightSystemsError("Schedule request failed")
         _validate_response(response, "schedule")
         schedule_data = response["schedule"]
+        if not isinstance(schedule_data, dict):
+            raise MyLightSystemsError("Invalid schedule payload")
+        if (
+            not isinstance(schedule_data.get("ranges"), str)
+            or schedule_data.get("type") != schedule_type
+            or not isinstance(schedule_data.get("enabled"), bool)
+        ):
+            raise MyLightSystemsError("Invalid schedule fields")
 
         return Schedule(
             ranges=schedule_data["ranges"],
             type=schedule_data["type"],
-            category=schedule_data["category"],
+            category=schedule_data.get("category"),
             enabled=schedule_data["enabled"],
         )

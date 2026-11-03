@@ -11,7 +11,7 @@ from homeassistant.components.sensor import (
     SensorEntityDescription,
     SensorStateClass,
 )
-from homeassistant.const import PERCENTAGE, UnitOfApparentPower, UnitOfEnergy
+from homeassistant.const import PERCENTAGE, UnitOfApparentPower, UnitOfEnergy, UnitOfPower
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
@@ -22,6 +22,7 @@ from .coordinator import (
     MyLightSystemsDataUpdateCoordinator,
 )
 from .entity import IntegrationMyLightSystemsEntity
+from .heater_telemetry import WaterHeaterData
 from .util.units import ws_to_kwh, ws_to_wh
 
 
@@ -30,6 +31,9 @@ class MyLightSensorEntityDescription(SensorEntityDescription):
     """Describes a sensor entity."""
 
     value_fn: Callable[[MyLightSystemsCoordinatorData], int | float | str | None]
+    attributes_fn: Callable[[MyLightSystemsCoordinatorData], dict] | None = None
+    # Only created when exactly one dedicated water-heater meter was discovered.
+    requires_heater_meter: bool = False
 
 
 def _calculate_grid_returned_energy(data: MyLightSystemsCoordinatorData) -> float | None:
@@ -40,6 +44,31 @@ def _calculate_grid_returned_energy(data: MyLightSystemsCoordinatorData) -> floa
     msb_charge_wh = ws_to_wh(data.msb_charge.value) if data.msb_charge is not None else 0
     result = ws_to_wh(data.produced_energy.value) - ws_to_wh(data.green_energy.value) - msb_charge_wh
     return result if result > 0 else 0
+
+
+def _heater(data: MyLightSystemsCoordinatorData) -> WaterHeaterData | None:
+    """Return heater observations only when they come from one identified meter."""
+    h = data.water_heater if data is not None else None
+    return h if h is not None and h.discovery == "found" else None
+
+
+def _heater_attributes(data: MyLightSystemsCoordinatorData) -> dict:
+    """Describe provenance without conflating a poll with a measured/decision timestamp.
+
+    The poll time is deliberately not exposed: it changes every update and would
+    make the recorder write a new state row even when nothing else changed.
+    """
+    h = data.water_heater
+    if h is None:
+        return {"discovery": "unavailable"}
+    return {
+        "discovery": h.discovery,
+        "controller_discovery": h.controller_discovery,
+        "power_measured_at": h.measured_at.isoformat() if h.measured_at else None,
+        "effective_report_period": h.report_period,
+        "green_play_ranges": h.green_play.ranges if h.green_play else None,
+        "next_command": h.next_command,
+    }
 
 
 MYLIGHT_SENSORS: tuple[MyLightSensorEntityDescription, ...] = (
@@ -138,6 +167,39 @@ MYLIGHT_SENSORS: tuple[MyLightSensorEntityDescription, ...] = (
         value_fn=_calculate_grid_returned_energy,
     ),
     MyLightSensorEntityDescription(
+        key="water_heater_power",
+        translation_key="water_heater_power",
+        native_unit_of_measurement=UnitOfPower.WATT,
+        device_class=SensorDeviceClass.POWER,
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=0,
+        value_fn=lambda data: h.power if (h := _heater(data)) else None,
+        attributes_fn=_heater_attributes,
+        requires_heater_meter=True,
+    ),
+    MyLightSensorEntityDescription(
+        key="water_heater_green_play",
+        translation_key="water_heater_green_play",
+        device_class=SensorDeviceClass.ENUM,
+        options=["enabled", "disabled"],
+        value_fn=lambda data: (
+            ("enabled" if h.green_play.enabled else "disabled") if (h := _heater(data)) and h.green_play else None
+        ),
+        attributes_fn=_heater_attributes,
+        requires_heater_meter=True,
+    ),
+    MyLightSensorEntityDescription(
+        # Daily counter from the dedicated meter; resets at local midnight.
+        key="water_heater_energy_today",
+        translation_key="water_heater_energy_today",
+        native_unit_of_measurement=UnitOfEnergy.WATT_HOUR,
+        state_class=SensorStateClass.TOTAL_INCREASING,
+        device_class=SensorDeviceClass.ENERGY,
+        suggested_display_precision=2,
+        value_fn=lambda data: ws_to_wh(h.energy.value) if (h := _heater(data)) and h.energy else None,
+        requires_heater_meter=True,
+    ),
+    MyLightSensorEntityDescription(
         key="water_heater_energy",
         translation_key="water_heater_energy",
         native_unit_of_measurement=UnitOfEnergy.WATT_HOUR,
@@ -157,6 +219,7 @@ async def async_setup_entry(
 ) -> None:
     """Configure sensor platform."""
     coordinator = entry.runtime_data
+    has_heater_meter = _heater(coordinator.data) is not None
     entities: list[SensorEntity] = [
         MyLightSystemsSensor(
             entry_id=entry.entry_id,
@@ -164,6 +227,7 @@ async def async_setup_entry(
             entity_description=entity_description,
         )
         for entity_description in MYLIGHT_SENSORS
+        if has_heater_meter or not entity_description.requires_heater_meter
     ]
 
     capacity = entry.data.get(CONF_ELECTRIC_POWER_CAPACITY)
@@ -199,6 +263,12 @@ class MyLightSystemsSensor(IntegrationMyLightSystemsEntity, SensorEntity):
     def native_value(self) -> int | float | str | None:
         """Return the state."""
         return self.entity_description.value_fn(self.coordinator.data)
+
+    @property
+    def extra_state_attributes(self) -> dict | None:
+        """Return read-only heater observations when relevant."""
+        fn = self.entity_description.attributes_fn
+        return fn(self.coordinator.data) if fn else None
 
     @property
     def available(self) -> bool:
