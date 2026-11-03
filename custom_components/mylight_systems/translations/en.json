@@ -83,7 +83,12 @@
       "battery_state": { "name": "Battery energy stored" },
       "grid_returned_energy": { "name": "Grid returned energy" },
       "water_heater_energy": { "name": "Water heater energy" },
-      "electric_power_capacity": { "name": "Subscribed power" }
+      "electric_power_capacity": { "name": "Subscribed power" },
+      "water_heater_power": { "name": "Water heater power" },
+      "water_heater_green_play": {
+        "name": "Water heater GreenPlay program",
+        "state": { "enabled": "Enabled", "disabled": "Disabled" }
+      }
     },
     "switch": {
       "master_relay": { "name": "Master relay" }

@@ -83,7 +83,12 @@
       "battery_state": { "name": "Energía almacenada en batería" },
       "grid_returned_energy": { "name": "Energía devuelta a la red" },
       "water_heater_energy": { "name": "Energía del calentador de agua" },
-      "electric_power_capacity": { "name": "Potencia contratada" }
+      "electric_power_capacity": { "name": "Potencia contratada" },
+      "water_heater_power": { "name": "Potencia del calentador de agua" },
+      "water_heater_green_play": {
+        "name": "Programa GreenPlay del calentador",
+        "state": { "enabled": "Activado", "disabled": "Desactivado" }
+      }
     },
     "switch": {
       "master_relay": { "name": "Relé principal" }

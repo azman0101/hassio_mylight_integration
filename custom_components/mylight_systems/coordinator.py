@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import asyncio
-from datetime import UTC, date, datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from typing import Any, NamedTuple
 
 from homeassistant.config_entries import ConfigEntry
@@ -15,6 +15,7 @@ from homeassistant.helpers.update_coordinator import (
     DataUpdateCoordinator,
     UpdateFailed,
 )
+from homeassistant.util import dt as dt_util
 
 from custom_components.mylight_systems.api.models import Measure
 
@@ -34,6 +35,7 @@ from .const import (
     DOMAIN,
     LOGGER,
 )
+from .water_heater import WaterHeaterData, read_water_heater
 
 
 class MyLightSystemsCoordinatorData(NamedTuple):
@@ -50,6 +52,7 @@ class MyLightSystemsCoordinatorData(NamedTuple):
     battery_state: Measure | None
     master_relay_state: str | None
     water_heater_energy: Measure | None
+    water_heater: WaterHeaterData | None = None
 
 
 # https://developers.home-assistant.io/docs/integration_fetching_data#coordinated-single-api-poll-for-data-for-all-entities
@@ -93,8 +96,9 @@ class MyLightSystemsDataUpdateCoordinator(DataUpdateCoordinator[MyLightSystemsCo
                 raise UpdateFailed("Authentication token is not set after login")
             auth_token: str = self.__auth_token
 
-            today = date.today().isoformat()
-            tomorrow = (date.today() + timedelta(days=1)).isoformat()
+            now = dt_util.now()
+            today = now.date().isoformat()
+            tomorrow = (now.date() + timedelta(days=1)).isoformat()
 
             coroutines: list[Any] = [
                 self.client.async_get_measures_grouping(
@@ -112,6 +116,15 @@ class MyLightSystemsDataUpdateCoordinator(DataUpdateCoordinator[MyLightSystemsCo
             battery_state = results[2]
             master_relay_state = results[3] if master_relay_id is not None else None
 
+            # Optional read-only telemetry must not take down unrelated installation sensors.
+            try:
+                heater = await read_water_heater(self.client, auth_token, now)
+            except UnauthorizedError:
+                raise
+            except MyLightSystemsError, KeyError, TypeError, ValueError:
+                LOGGER.debug("Optional water heater telemetry unavailable")
+                heater = None
+
             data = MyLightSystemsCoordinatorData(
                 produced_energy=self.find_measure_by_type(energy_result, "produced_energy"),
                 grid_energy=self.find_measure_by_type(energy_result, "grid_energy"),
@@ -123,7 +136,12 @@ class MyLightSystemsDataUpdateCoordinator(DataUpdateCoordinator[MyLightSystemsCo
                 green_energy=self.find_measure_by_type(energy_result, "green_energy"),
                 battery_state=battery_state,
                 master_relay_state=master_relay_state,
-                water_heater_energy=self.find_measure_by_type(total_result, "water_heater_energy"),
+                water_heater_energy=(
+                    heater.energy
+                    if heater is not None and heater.discovery != "not_found"
+                    else self.find_measure_by_type(total_result, "water_heater_energy")
+                ),
+                water_heater=heater,
             )
 
             self._data = data
