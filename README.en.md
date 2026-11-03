@@ -35,6 +35,23 @@ _Integration to integrate with [MyLight Systems][mylight_systems]._
 | `sensor.total_green_energy`                     | Solar energy consumed directly by your home         | Wh   | `total_increasing` |
 | `sensor.battery_state`                          | Current energy stored in the Smart Battery          | kWh  | `measurement`      |
 | `sensor.grid_returned_energy`                   | Solar energy exported back to the grid              | Wh   | `total_increasing` |
+| `sensor.water_heater_energy` | Cumulative water heater energy; disabled by default | Wh | `total_increasing` |
+| `sensor.electric_power_capacity` | Subscribed electrical power, when supplied by the profile | kVA | `measurement` |
+| `sensor.water_heater_energy_today` | Today's energy from the dedicated water heater meter (since 0.11.0) | Wh | `total_increasing` |
+| `sensor.water_heater_power` | Measured water heater power (since 0.11.0) | W | `measurement` |
+| `sensor.water_heater_green_play` | GreenPlay program status: `enabled` or `disabled` (since 0.11.0) | — | — |
+
+### Water heater and GreenPlay — since 0.11.0
+
+The entity IDs in the table are examples based on sensor keys. Actual Home Assistant entity IDs depend on the language, integration name and any renaming. Check the device page before using them in an automation.
+
+The three new sensors are created only when exactly one dedicated meter of type `cmp` or `gmd`, with `deviceTypeId=water_heater`, is found during integration setup. Energy and power come from the meter. The GreenPlay program and next planned command come from the separately identified controlling relay. If that relay is missing or ambiguous, GreenPlay status stays unknown.
+
+`water_heater_energy_today` resets each day in Home Assistant's timezone. The existing cumulative `water_heater_energy` sensor keeps its identifier and meaning. It remains disabled by default and may be unknown if the API does not provide that total. Missing data and stale power readings are not replaced with zero.
+
+GreenPlay is an enum sensor, not a switch. Its attributes include `green_play_ranges`, `next_command`, `power_measured_at`, `effective_report_period`, `discovery` and `controller_discovery`. An enabled GreenPlay program does not mean the relay is on, and an energized relay does not prove that the heating element is consuming power.
+
+The configured polling interval is unchanged (15 minutes by default). After updating through HACS, restart Home Assistant to load the new code. If discovery was temporarily unavailable during setup, reload the integration once the connection recovers. See the [detailed documentation](docs/WATER_HEATER_READ_ONLY.md) for limits and read-only checks.
 
 ### Switches
 

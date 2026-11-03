@@ -35,6 +35,23 @@ _Intégration pour se connecter à [MyLight Systems][mylight_systems]._
 | `sensor.total_green_energy`                     | Énergie solaire consommée directement par votre domicile | Wh    | `total_increasing` |
 | `sensor.battery_state`                          | Énergie actuellement stockée dans la Smart Battery       | kWh   | `measurement`      |
 | `sensor.grid_returned_energy`                   | Énergie solaire réinjectée sur le réseau                 | Wh    | `total_increasing` |
+| `sensor.water_heater_energy` | Énergie cumulée du chauffe-eau ; désactivé par défaut | Wh | `total_increasing` |
+| `sensor.electric_power_capacity` | Puissance électrique souscrite, si fournie par le profil | kVA | `measurement` |
+| `sensor.water_heater_energy_today` | Énergie du jour mesurée par le compteur chauffe-eau dédié (depuis 0.11.0) | Wh | `total_increasing` |
+| `sensor.water_heater_power` | Puissance mesurée du chauffe-eau (depuis 0.11.0) | W | `measurement` |
+| `sensor.water_heater_green_play` | État du programme GreenPlay : `enabled` ou `disabled` (depuis 0.11.0) | — | — |
+
+### Chauffe-eau et GreenPlay — depuis 0.11.0
+
+Les identifiants du tableau sont des exemples basés sur les clés des capteurs. Les identifiants réels dans Home Assistant dépendent notamment de la langue, du nom de l’intégration et des renommages ; consultez la page de l’appareil avant de les utiliser dans une automatisation.
+
+Les trois nouveaux capteurs sont créés uniquement si un seul compteur dédié de type `cmp` ou `gmd`, avec `deviceTypeId=water_heater`, est identifié au démarrage de l’intégration. L’énergie et la puissance proviennent du compteur ; le programme GreenPlay et la prochaine commande proviennent du relais de commande identifié séparément. Si le relais est absent ou ambigu, l’état GreenPlay reste inconnu.
+
+`water_heater_energy_today` est remis à zéro chaque jour selon le fuseau Home Assistant. Le compteur cumulatif existant `water_heater_energy` conserve son identifiant et sa signification ; il reste désactivé par défaut et peut être inconnu si l’API ne fournit pas ce total. Une donnée absente ou une puissance périmée ne devient pas artificiellement zéro.
+
+Le capteur GreenPlay est un capteur d’état enum, pas un interrupteur. Ses attributs incluent `green_play_ranges`, `next_command`, `power_measured_at`, `effective_report_period`, `discovery` et `controller_discovery`. GreenPlay activé ne signifie pas que le relais est allumé ; un relais allumé ne garantit pas que la résistance chauffe.
+
+La fréquence de collecte configurée reste inchangée (15 minutes par défaut). Après une mise à jour HACS, redémarrez Home Assistant pour charger le nouveau code. Si la découverte était temporairement indisponible au démarrage, rechargez ensuite l’intégration. Voir [la documentation détaillée](docs/WATER_HEATER_READ_ONLY.md) pour les limites et les contrôles de lecture.
 
 ### Interrupteurs
 

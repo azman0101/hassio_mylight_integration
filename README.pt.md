@@ -35,6 +35,23 @@ _Integração para conectar ao [MyLight Systems][mylight_systems]._
 | `sensor.total_green_energy`                     | Energia solar consumida diretamente pela sua casa | Wh      | `total_increasing` |
 | `sensor.battery_state`                          | Energia atualmente armazenada na Smart Battery    | kWh     | `measurement`      |
 | `sensor.grid_returned_energy`                   | Energia solar exportada para a rede               | Wh      | `total_increasing` |
+| `sensor.water_heater_energy` | Energia acumulada do aquecedor; desativado por predefinição | Wh | `total_increasing` |
+| `sensor.electric_power_capacity` | Potência elétrica contratada, quando fornecida pelo perfil | kVA | `measurement` |
+| `sensor.water_heater_energy_today` | Energia de hoje do contador dedicado ao aquecedor (desde 0.11.0) | Wh | `total_increasing` |
+| `sensor.water_heater_power` | Potência medida do aquecedor de água (desde 0.11.0) | W | `measurement` |
+| `sensor.water_heater_green_play` | Estado do programa GreenPlay: `enabled` ou `disabled` (desde 0.11.0) | — | — |
+
+### Aquecedor de água e GreenPlay — desde 0.11.0
+
+Os IDs de entidade na tabela são exemplos baseados nas chaves dos sensores. Os IDs reais dependem do idioma, do nome da integração e de alterações de nome. Consulte a página do dispositivo antes de os usar numa automação.
+
+Os três novos sensores só são criados se for encontrado exatamente um contador dedicado do tipo `cmp` ou `gmd`, com `deviceTypeId=water_heater`, ao iniciar a integração. A energia e a potência vêm do contador. O programa GreenPlay e o próximo comando vêm do relé de controlo identificado separadamente. Se o relé estiver ausente ou a identificação for ambígua, o estado GreenPlay permanece desconhecido.
+
+`water_heater_energy_today` reinicia diariamente no fuso horário do Home Assistant. O sensor acumulativo existente `water_heater_energy` mantém o ID e o significado; continua desativado por predefinição e pode estar desconhecido se a API não fornecer esse total. Dados ausentes e leituras de potência antigas não são substituídos por zero.
+
+GreenPlay é um sensor enum, não um interruptor. Os atributos incluem `green_play_ranges`, `next_command`, `power_measured_at`, `effective_report_period`, `discovery` e `controller_discovery`. Um programa ativo não significa que o relé esteja ligado; um relé ligado não prova que a resistência esteja a consumir energia.
+
+O intervalo de consulta configurado não muda (15 minutos por predefinição). Reinicie o Home Assistant depois de atualizar pelo HACS. Se a descoberta estiver temporariamente indisponível ao iniciar, recarregue a integração quando a ligação recuperar. Consulte os limites e as verificações de leitura na [documentação detalhada](docs/WATER_HEATER_READ_ONLY.md), em inglês.
 
 ### Interruptores
 
