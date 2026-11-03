@@ -14,13 +14,16 @@ editing schedules, or switching the heater. Existing switch controls are unchang
 - `water_heater_power` exposes fresh `electric_power` in watts. Zero is a valid
   reading; a missing, stale, future-dated or unsupported reading is unknown.
 - `water_heater_green_play` is an enum sensor, not a switch: `enabled`, `disabled`
-  or unknown. Attributes include raw `green_play_ranges`, `next_command`,
-  `power_measured_at`, `effective_report_period`, and `discovery`. The poll time
+  or unknown, read from the controlling relay. Attributes include raw
+  `green_play_ranges`, `next_command`, `power_measured_at`,
+  `effective_report_period`, `discovery` and `controller_discovery`. The poll time
   is not exposed, so the recorder does not write a new row on every update.
 
 The three heater sensors above are only created when exactly one dedicated meter
 is discovered at setup. Installations without one get no always-unknown entities;
-reload the integration after a meter is added.
+reload the integration after a meter is added, or if discovery was temporarily
+unavailable at startup. A `not_found` or `ambiguous` discovery result is cached
+for up to 24 hours; reloading the integration re-reads the inventory at once.
   A disabled program with empty ranges is valid, not an API failure.
 
 An enabled GreenPlay program does not mean the relay is currently on. An energized
@@ -37,9 +40,24 @@ With no supported meter, `discovery=not_found`. Raw reads check for
 `not.authorized` like the typed client methods, so an expired session triggers
 reauthentication instead of looking like a missing meter.
 
-The meter owns the requested GreenPlay schedule. A `nextCommand` on its explicitly
-linked composite parent (`masterType=gmd`, `masterMac`) is used only when the meter
-itself has none. Commands on unrelated relays are never attributed to it.
+The meter and the controller are separate devices. Energy and power are read on
+the meter. The GreenPlay program and `nextCommand` are read on the relay that
+controls the heater: on the live installation the meter's own schedule is
+disabled with empty ranges while the relay's program is enabled, and only the
+relay carries the next command.
+
+The controller is the single `sw` device with `deviceTypeId=water_heater`. With
+several such relays, an explicit inventory link to the meter (`masterMac` in
+either direction) narrows the choice, then a GreenPlay program capability
+(`programs.greenPlayeEnabled`, vendor spelling). If that still leaves more than
+one, or none exists, `controller_discovery` is `ambiguous` or `not_found` and the
+program and next command stay unknown; the last relay in the list is never
+taken. Energy and power are still reported from the meter.
+
+The next command is the one known at read time; GreenPlay may recompute it
+later. It does not by itself prove that heating started or how long it lasted.
+The meter's `state` is not evidence of heating either: on the live installation
+it read `on` while the relay was `off` and power was 0 W.
 
 ## API contracts
 
@@ -69,11 +87,15 @@ schedule), in parallel with the core reads rather than after them.
 Optional endpoint failures do not invalidate unrelated global sensors; a rejected
 session still triggers the existing authentication handling.
 
-Measurement time and API-read time are separate. Legacy timestamps without an
-offset are interpreted as HA local wall time, matching MyHome's local parsing; if
-that reading is not fresh, UTC is tried as a fallback.
+Measurement time and API-read time are separate. Each source has one fixed date
+interpretation, never chosen according to whether the result looks fresh.
+Offset-aware dates are used as given. Dates without an offset are HA local wall
+time, matching MyHome's portal and the live installation (Europe/Paris).
+`parse_power`/`read_water_heater` take an explicit `naive_tz` for a source
+confirmed to send naive UTC dates; nothing switches to it automatically.
 Power is rejected beyond max(15 minutes, three device reporting periods), and
-readings up to 5 minutes in the future are accepted to tolerate clock skew.
+readings up to 5 minutes in the future are accepted to tolerate clock skew. That
+tolerance never changes the timezone: a local reading 61 minutes old is rejected.
 `nextCommand` is retained as supplied: its timestamp schema and timezone are not
 inferred, and `last_read` is not advertised as the time a decision was made.
 

@@ -16,6 +16,7 @@ from custom_components.mylight_systems.heater_telemetry import (
     MeterDiscovery,
     WaterHeaterData,
     discover_meter,
+    find_controller,
     find_meter,
     parse_day_energy,
     parse_power,
@@ -29,6 +30,12 @@ METER = {
     "deviceTypeId": "water_heater",
     "masterType": "gmd",
     "masterMac": "parent-001",
+}
+RELAY = {
+    "id": "relay-001",
+    "type": "sw",
+    "deviceTypeId": "water_heater",
+    "programs": {"greenPlayeEnabled": True, "scheduleEnabled": False},
 }
 
 
@@ -44,7 +51,7 @@ def client_fixture(*, energy=None, state=None, schedule=None, devices=None):
         assert method == "get"
         assert path in (DEVICES_URL, MEASURES_GROUPING_URL, STATES_URL)
         if path == DEVICES_URL:
-            return {"status": "ok", "devices": devices if devices is not None else [METER]}
+            return {"status": "ok", "devices": devices if devices is not None else [METER, RELAY]}
         if path == MEASURES_GROUPING_URL:
             assert params["deviceId"] == "meter-001"
             assert params["fromDate"] == "2026-11-04"
@@ -73,7 +80,8 @@ def client_fixture(*, energy=None, state=None, schedule=None, devices=None):
                             }
                         }
                     ],
-                }
+                },
+                {"deviceId": "relay-001", "nextCommand": {"type": "GREEN_PLAY", "state": "ON"}},
             ],
         }
 
@@ -83,7 +91,7 @@ def client_fixture(*, energy=None, state=None, schedule=None, devices=None):
 
 
 def test_discovery_does_not_choose_relay_or_french_name():
-    assert find_meter([{"id": "relay-001", "type": "sw", "deviceTypeId": "water_heater"}, METER])[0] == METER
+    assert find_meter([RELAY, METER])[0] == METER
     assert find_meter([{"id": "x", "type": "cmp", "name": "Compteur chauffe eau"}]) == (None, "not_found")
     assert find_meter([METER, {**METER, "id": "other"}]) == (None, "ambiguous")
 
@@ -96,7 +104,10 @@ async def test_reads_dedicated_meter_and_disabled_empty_program():
     assert data.power == 2100
     assert data.green_play.enabled is False and data.green_play.ranges == ""
     assert data.measured_at.isoformat() == "2026-11-04T00:29:00+01:00"
-    client.async_get_schedule.assert_awaited_once_with("test-only-token", "green_play", device_id="meter-001")
+    # The program belongs to the relay, not to the energy meter.
+    client.async_get_schedule.assert_awaited_once_with("test-only-token", "green_play", device_id="relay-001")
+    assert data.next_command == {"type": "GREEN_PLAY", "state": "ON"}
+    assert data.controller_discovery == "found"
     assert client.async_raw_request.await_count == 3
 
 
@@ -110,15 +121,41 @@ async def test_ambiguous_meter_never_guesses_or_fetches_program():
 
 
 @pytest.mark.asyncio
-async def test_next_command_from_explicit_parent_not_unrelated_relay():
+async def test_next_command_comes_from_controller_not_meter_or_parent():
     client = client_fixture(
         state=[
-            {"deviceId": "meter-001", "sensorStates": []},
-            {"deviceId": "parent-001", "nextCommand": {"time": "03:00", "state": "on"}},
+            {"deviceId": "meter-001", "sensorStates": [], "nextCommand": {"state": "meter"}},
+            {"deviceId": "parent-001", "nextCommand": {"state": "parent"}},
+            {"deviceId": "relay-001", "nextCommand": {"time": "2026-11-04 11:00:00", "state": "ON"}},
             {"deviceId": "unrelated", "nextCommand": {"state": "off"}},
         ]
     )
-    assert (await read_water_heater(client, "test-only-token", NOW)).next_command == {"time": "03:00", "state": "on"}
+    data = await read_water_heater(client, "test-only-token", NOW)
+    assert data.next_command == {"time": "2026-11-04 11:00:00", "state": "ON"}
+
+
+@pytest.mark.asyncio
+async def test_without_controller_program_and_command_stay_unknown_but_meter_reads():
+    client = client_fixture(devices=[METER])
+    data = await read_water_heater(client, "test-only-token", NOW)
+    assert data.discovery == "found" and data.controller_discovery == "not_found"
+    assert data.energy.value == 3600000 and data.power == 2100
+    assert data.green_play is None and data.next_command is None
+    client.async_get_schedule.assert_not_awaited()
+
+
+def test_controller_discovery_never_guesses_between_relays():
+    other = {"id": "relay-002", "type": "sw", "deviceTypeId": "water_heater"}
+    plain = {"id": "relay-003", "type": "sw", "deviceTypeId": "heater"}
+    assert find_controller([METER, RELAY, plain], METER) == (RELAY, "found")
+    # Several unlinked relays: the one exposing a GreenPlay program wins only if unique.
+    assert find_controller([METER, other, RELAY], METER) == (RELAY, "found")
+    assert find_controller([METER, other, {**other, "id": "relay-004"}], METER) == (None, "ambiguous")
+    assert find_controller([METER, RELAY, {**RELAY, "id": "relay-005"}], METER) == (None, "ambiguous")
+    # An explicit inventory link takes precedence over list order and capabilities.
+    linked = {**other, "id": "parent-001"}
+    assert find_controller([METER, RELAY, linked], METER) == (linked, "found")
+    assert find_controller([METER], METER) == (None, "not_found")
 
 
 @pytest.mark.asyncio
@@ -270,16 +307,33 @@ def test_utc_group_date_matches_local_day():
     assert parse_day_energy(energy, "2026-11-03", NOW.tzinfo) is None
 
 
-def test_naive_utc_power_timestamp_falls_back_to_utc():
-    # 23:29 UTC naive == 00:29 Paris: stale as local wall time, fresh as UTC.
-    state = {
-        "sensorStates": [
-            {"measure": {"type": "electric_power", "value": 5, "unit": "watt", "date": "2026-11-03 23:29:00"}}
-        ]
-    }
-    power, measured_at = parse_power(state, NOW)
-    assert power == 5
-    assert measured_at.isoformat() == "2026-11-04T00:29:00+01:00"
+def _naive_state(date, value=2100):
+    return {"sensorStates": [{"measure": {"type": "electric_power", "value": value, "unit": "watt", "date": date}}]}
+
+
+def test_stale_local_reading_is_never_reinterpreted_as_fresh_utc():
+    # Live site: naive dates are Paris wall time. A 61-minute-old reading must be
+    # rejected, not shifted to UTC where it would look one minute old.
+    now = datetime(2026, 11, 3, 22, 30, tzinfo=ZoneInfo("Europe/Paris"))
+    power, measured_at = parse_power(_naive_state("2026-11-03 21:29:00"), now)
+    assert power is None
+    assert measured_at.isoformat() == "2026-11-03T21:29:00+01:00"
+
+
+def test_summer_stale_local_reading_is_rejected():
+    now = datetime(2026, 7, 3, 22, 30, tzinfo=ZoneInfo("Europe/Paris"))
+    assert parse_power(_naive_state("2026-07-03 20:29:00"), now)[0] is None
+
+
+def test_naive_dates_use_explicit_timezone_for_confirmed_utc_source():
+    from datetime import UTC  # noqa: PLC0415
+
+    now = datetime(2026, 11, 3, 22, 30, tzinfo=ZoneInfo("Europe/Paris"))
+    power, measured_at = parse_power(_naive_state("2026-11-03 21:29:00"), now, naive_tz=UTC)
+    assert power == 2100
+    assert measured_at.isoformat() == "2026-11-03T22:29:00+01:00"
+    # Live sample: local naive date, 0 W, two minutes old.
+    assert parse_power(_naive_state("2026-11-03 22:27:47", 0), now)[0] == 0
 
 
 @pytest.mark.asyncio

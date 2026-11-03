@@ -63,6 +63,7 @@ def _heater_attributes(data: MyLightSystemsCoordinatorData) -> dict:
         return {"discovery": "unavailable"}
     return {
         "discovery": h.discovery,
+        "controller_discovery": h.controller_discovery,
         "power_measured_at": h.measured_at.isoformat() if h.measured_at else None,
         "effective_report_period": h.report_period,
         "green_play_ranges": h.green_play.ranges if h.green_play else None,
