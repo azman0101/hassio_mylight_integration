@@ -65,6 +65,9 @@ class MyLightApiClient:
     def __init__(self, base_url: str, session: aiohttp.ClientSession) -> None:
         """Initialize."""
         self._session: aiohttp.ClientSession = session
+        self._states_task: asyncio.Task | None = None
+        self._states_token: str | None = None
+        self._states_created: float = 0
         self._base_url = base_url if base_url and not base_url.isspace() else DEFAULT_BASE_URL
 
     async def _execute_request(
@@ -110,7 +113,25 @@ class MyLightApiClient:
         headers: dict | None = None,
     ) -> Any:
         """Execute a raw API request and return the unprocessed JSON response."""
+        if method.lower() == "get" and path == STATES_URL and params is not None and set(params) == {"authToken"}:
+            return await self.async_get_states(params["authToken"])
         return await self._execute_request(method, path, params, headers)
+
+    async def async_get_states(self, auth_token: str) -> Any:
+        """Share one states read across concurrent consumers and a five-second refresh window."""
+        now = asyncio.get_running_loop().time()
+        task = self._states_task
+        if task is not None and self._states_token == auth_token:
+            if not task.done() or (
+                not task.cancelled() and task.exception() is None and now - self._states_created < 5
+            ):
+                return await asyncio.shield(task)
+        self._states_token = auth_token
+        self._states_created = now
+        self._states_task = asyncio.create_task(
+            self._execute_request("get", STATES_URL, params={"authToken": auth_token})
+        )
+        return await asyncio.shield(self._states_task)
 
     async def async_login(self, email: str, password: str) -> Login:
         """Log user and return the authentication token."""
@@ -306,9 +327,7 @@ class MyLightApiClient:
 
     async def async_get_battery_state(self, auth_token: str, battery_id: str) -> Measure | None:
         """Get battery state."""
-        response: StatesResponseSchema = await self._execute_request(
-            "get", STATES_URL, params={"authToken": auth_token}
-        )
+        response: StatesResponseSchema = await self.async_get_states(auth_token)
 
         if response["status"] == "error":
             if response.get("error") == ERR_NOT_AUTHORIZED:
@@ -374,9 +393,7 @@ class MyLightApiClient:
 
     async def async_get_relay_state(self, auth_token: str, relay_id: str) -> str | None:
         """Get relay state."""
-        response: StatesResponseSchema = await self._execute_request(
-            "get", STATES_URL, params={"authToken": auth_token}
-        )
+        response: StatesResponseSchema = await self.async_get_states(auth_token)
 
         if response["status"] == "error":
             if response.get("error") == ERR_NOT_AUTHORIZED:

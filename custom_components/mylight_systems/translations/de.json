@@ -85,6 +85,9 @@
       "water_heater_energy": { "name": "Warmwasserbereiter-Energie" },
       "electric_power_capacity": { "name": "Vertraglich zugesicherte Leistung" },
       "water_heater_energy_today": { "name": "Warmwasserbereiter-Energie heute" },
+      "grid_power": { "name": "Netzleistung" },
+      "grid_import_power": { "name": "Netzbezugsleistung" },
+      "grid_export_power": { "name": "Netzeinspeiseleistung" },
       "water_heater_power": { "name": "Warmwasserbereiter Leistung" },
       "water_heater_green_play": {
         "name": "Warmwasserbereiter GreenPlay-Programm",

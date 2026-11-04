@@ -37,9 +37,16 @@ _Integration to integrate with [MyLight Systems][mylight_systems]._
 | `sensor.grid_returned_energy`                   | Solar energy exported back to the grid              | Wh   | `total_increasing` |
 | `sensor.water_heater_energy` | Cumulative water heater energy; disabled by default | Wh | `total_increasing` |
 | `sensor.electric_power_capacity` | Subscribed electrical power, when supplied by the profile | kVA | `measurement` |
+| `sensor.grid_power` | Signed grid power: positive import, negative export | W | `measurement` |
+| `sensor.grid_import_power` | Whole-house grid import power | W | `measurement` |
+| `sensor.grid_export_power` | Grid export power | W | `measurement` |
 | `sensor.water_heater_energy_today` | Today's energy from the dedicated water heater meter (since 0.11.0) | Wh | `total_increasing` |
 | `sensor.water_heater_power` | Measured water heater power (since 0.11.0) | W | `measurement` |
 | `sensor.water_heater_green_play` | GreenPlay program status: `enabled` or `disabled` (since 0.11.0) | — | — |
+
+### Grid power — since 0.12.0
+
+Three read-only sensors are created when one compatible grid meter is identified. Missing or stale readings stay unknown. The existing polling interval is unchanged; zoom cannot reconstruct missing samples. See [source and limitations](docs/GRID_POWER.md).
 
 ### Water heater and GreenPlay — since 0.11.0
 

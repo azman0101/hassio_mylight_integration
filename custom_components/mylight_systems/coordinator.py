@@ -35,6 +35,7 @@ from .const import (
     DOMAIN,
     LOGGER,
 )
+from .grid_telemetry import GridData, GridDiscovery, discover_grid_meter, read_grid_power
 from .heater_telemetry import MeterDiscovery, WaterHeaterData, discover_meter, read_water_heater
 
 # The device inventory rarely changes; re-read it at most this often.
@@ -56,6 +57,7 @@ class MyLightSystemsCoordinatorData(NamedTuple):
     master_relay_state: str | None
     water_heater_energy: Measure | None
     water_heater: WaterHeaterData | None = None
+    grid: GridData | None = None
 
 
 # https://developers.home-assistant.io/docs/integration_fetching_data#coordinated-single-api-poll-for-data-for-all-entities
@@ -64,6 +66,7 @@ class MyLightSystemsDataUpdateCoordinator(DataUpdateCoordinator[MyLightSystemsCo
 
     config_entry: ConfigEntry
     _heater_discovery: MeterDiscovery | None = None
+    _grid_discovery: GridDiscovery | None = None
 
     def __init__(
         self,
@@ -115,13 +118,15 @@ class MyLightSystemsDataUpdateCoordinator(DataUpdateCoordinator[MyLightSystemsCo
                 coroutines.append(self.client.async_get_relay_state(auth_token, master_relay_id))
             # Optional heater telemetry runs alongside the core reads, not after them.
             coroutines.append(self._async_read_heater(auth_token, now))
+            coroutines.append(self._async_read_grid(auth_token, now))
 
             results = await asyncio.gather(*coroutines)
             energy_result = results[0]
             total_result = results[1]
             battery_state = results[2]
             master_relay_state = results[3] if master_relay_id is not None else None
-            heater: WaterHeaterData | None = results[-1]
+            heater: WaterHeaterData | None = results[-2]
+            grid: GridData | None = results[-1]
 
             data = MyLightSystemsCoordinatorData(
                 produced_energy=self.find_measure_by_type(energy_result, "produced_energy"),
@@ -137,6 +142,7 @@ class MyLightSystemsDataUpdateCoordinator(DataUpdateCoordinator[MyLightSystemsCo
                 # Lifetime cumulative total; the dedicated meter's daily value is a separate sensor.
                 water_heater_energy=self.find_measure_by_type(total_result, "water_heater_energy"),
                 water_heater=heater,
+                grid=grid,
             )
 
             self._data = data
@@ -180,6 +186,20 @@ class MyLightSystemsDataUpdateCoordinator(DataUpdateCoordinator[MyLightSystemsCo
             raise
         except MyLightSystemsError, KeyError, TypeError, ValueError:
             LOGGER.debug("Optional water heater telemetry unavailable")
+            return None
+
+    async def _async_read_grid(self, auth_token: str, now: datetime) -> GridData | None:
+        """Keep optional grid telemetry separate from the installation's core availability."""
+        try:
+            discovery = self._grid_discovery
+            if discovery is None or now - discovery.discovered_at > HEATER_DISCOVERY_TTL:
+                discovery = await discover_grid_meter(self.client, auth_token, now)
+                self._grid_discovery = discovery
+            return await read_grid_power(self.client, auth_token, now, discovery)
+        except UnauthorizedError:
+            raise
+        except MyLightSystemsError, KeyError, TypeError, ValueError:
+            LOGGER.debug("Optional grid power telemetry unavailable")
             return None
 
     def _token_needs_refresh(self) -> bool:
