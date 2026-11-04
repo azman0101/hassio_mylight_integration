@@ -85,6 +85,9 @@
       "water_heater_energy": { "name": "Energía del calentador de agua" },
       "electric_power_capacity": { "name": "Potencia contratada" },
       "water_heater_energy_today": { "name": "Energía del calentador de agua hoy" },
+      "grid_power": { "name": "Potencia de red" },
+      "grid_import_power": { "name": "Potencia importada de la red" },
+      "grid_export_power": { "name": "Potencia exportada a la red" },
       "water_heater_power": { "name": "Potencia del calentador de agua" },
       "water_heater_green_play": {
         "name": "Programa GreenPlay del calentador",

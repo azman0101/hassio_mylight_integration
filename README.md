@@ -37,9 +37,16 @@ _Intégration pour se connecter à [MyLight Systems][mylight_systems]._
 | `sensor.grid_returned_energy`                   | Énergie solaire réinjectée sur le réseau                 | Wh    | `total_increasing` |
 | `sensor.water_heater_energy` | Énergie cumulée du chauffe-eau ; désactivé par défaut | Wh | `total_increasing` |
 | `sensor.electric_power_capacity` | Puissance électrique souscrite, si fournie par le profil | kVA | `measurement` |
+| `sensor.grid_power` | Puissance réseau signée : positive = import, négative = injection | W | `measurement` |
+| `sensor.grid_import_power` | Puissance importée du réseau, maison entière | W | `measurement` |
+| `sensor.grid_export_power` | Puissance injectée au réseau | W | `measurement` |
 | `sensor.water_heater_energy_today` | Énergie du jour mesurée par le compteur chauffe-eau dédié (depuis 0.11.0) | Wh | `total_increasing` |
 | `sensor.water_heater_power` | Puissance mesurée du chauffe-eau (depuis 0.11.0) | W | `measurement` |
 | `sensor.water_heater_green_play` | État du programme GreenPlay : `enabled` ou `disabled` (depuis 0.11.0) | — | — |
+
+### Puissance réseau — depuis 0.12.0
+
+Trois capteurs en lecture seule sont créés si un compteur réseau compatible unique est identifié. Les données absentes ou périmées restent inconnues. La fréquence de collecte existante est conservée ; un zoom ne reconstitue pas les mesures manquantes. Voir [la provenance et les limites](docs/GRID_POWER.md).
 
 ### Chauffe-eau et GreenPlay — depuis 0.11.0
 

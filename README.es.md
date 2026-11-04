@@ -37,9 +37,16 @@ _Integración para conectar con [MyLight Systems][mylight_systems]._
 | `sensor.grid_returned_energy`                   | Energía solar exportada a la red                       | Wh     | `total_increasing` |
 | `sensor.water_heater_energy` | Energía acumulada del calentador; desactivado de forma predeterminada | Wh | `total_increasing` |
 | `sensor.electric_power_capacity` | Potencia eléctrica contratada, si el perfil la proporciona | kVA | `measurement` |
+| `sensor.grid_power` | Potencia de red: positiva importación, negativa exportación | W | `measurement` |
+| `sensor.grid_import_power` | Potencia importada de toda la vivienda | W | `measurement` |
+| `sensor.grid_export_power` | Potencia exportada a la red | W | `measurement` |
 | `sensor.water_heater_energy_today` | Energía de hoy del contador dedicado al calentador (desde 0.11.0) | Wh | `total_increasing` |
 | `sensor.water_heater_power` | Potencia medida del calentador (desde 0.11.0) | W | `measurement` |
 | `sensor.water_heater_green_play` | Estado del programa GreenPlay: `enabled` o `disabled` (desde 0.11.0) | — | — |
+
+### Potencia de red — desde 0.12.0
+
+Tres sensores de solo lectura si se identifica un único contador compatible. Las lecturas ausentes u obsoletas permanecen desconocidas. El intervalo de consulta no cambia. Véase [origen y límites](docs/GRID_POWER.md).
 
 ### Calentador de agua y GreenPlay — desde 0.11.0
 

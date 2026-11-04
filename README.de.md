@@ -37,9 +37,16 @@ _Integration zur Verbindung mit [MyLight Systems][mylight_systems]._
 | `sensor.grid_returned_energy`                   | Solarenergie ins Netz eingespeist                      | Wh      | `total_increasing` |
 | `sensor.water_heater_energy` | Kumulierte Energie des Warmwasserbereiters; standardmäßig deaktiviert | Wh | `total_increasing` |
 | `sensor.electric_power_capacity` | Vertragliche Anschlussleistung, sofern im Profil vorhanden | kVA | `measurement` |
+| `sensor.grid_power` | Netzleistung: positiv Bezug, negativ Einspeisung | W | `measurement` |
+| `sensor.grid_import_power` | Netzbezugsleistung des gesamten Hauses | W | `measurement` |
+| `sensor.grid_export_power` | Netzeinspeiseleistung | W | `measurement` |
 | `sensor.water_heater_energy_today` | Heutiger Energieverbrauch des eigenen Warmwasserzählers (seit 0.11.0) | Wh | `total_increasing` |
 | `sensor.water_heater_power` | Gemessene Leistung des Warmwasserbereiters (seit 0.11.0) | W | `measurement` |
 | `sensor.water_heater_green_play` | GreenPlay-Programmstatus: `enabled` oder `disabled` (seit 0.11.0) | — | — |
+
+### Netzleistung — seit 0.12.0
+
+Drei schreibgeschützte Sensoren bei genau einem kompatiblen Netzzähler. Fehlende oder veraltete Werte bleiben unbekannt. Das Abfrageintervall bleibt unverändert. Siehe [Datenquelle und Grenzen](docs/GRID_POWER.md).
 
 ### Warmwasserbereiter und GreenPlay — seit 0.11.0
 

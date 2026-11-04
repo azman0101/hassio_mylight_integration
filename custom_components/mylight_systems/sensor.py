@@ -34,6 +34,7 @@ class MyLightSensorEntityDescription(SensorEntityDescription):
     attributes_fn: Callable[[MyLightSystemsCoordinatorData], dict] | None = None
     # Only created when exactly one dedicated water-heater meter was discovered.
     requires_heater_meter: bool = False
+    requires_grid_meter: bool = False
 
 
 def _calculate_grid_returned_energy(data: MyLightSystemsCoordinatorData) -> float | None:
@@ -68,6 +69,25 @@ def _heater_attributes(data: MyLightSystemsCoordinatorData) -> dict:
         "effective_report_period": h.report_period,
         "green_play_ranges": h.green_play.ranges if h.green_play else None,
         "next_command": h.next_command,
+    }
+
+
+def _grid_value(data: MyLightSystemsCoordinatorData, direction: str) -> float | None:
+    """Keep zero import/export distinct from missing signed power."""
+    grid = data.grid
+    if grid is None or grid.discovery != "found" or grid.power is None:
+        return None
+    return grid.power if direction == "signed" else max(0, grid.power if direction == "import" else -grid.power)
+
+
+def _grid_attributes(data: MyLightSystemsCoordinatorData) -> dict:
+    grid = data.grid
+    return {
+        "grid_discovery": grid.discovery if grid else "unavailable",
+        "grid_measured_at": grid.measured_at.isoformat() if grid and grid.measured_at else None,
+        "effective_report_period": grid.report_period if grid else None,
+        "source": "asoka_electric_counter",
+        "sign_convention": "positive_import_negative_export",
     }
 
 
@@ -167,6 +187,39 @@ MYLIGHT_SENSORS: tuple[MyLightSensorEntityDescription, ...] = (
         value_fn=_calculate_grid_returned_energy,
     ),
     MyLightSensorEntityDescription(
+        key="grid_power",
+        translation_key="grid_power",
+        native_unit_of_measurement=UnitOfPower.WATT,
+        device_class=SensorDeviceClass.POWER,
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=0,
+        value_fn=lambda data: _grid_value(data, "signed"),
+        attributes_fn=_grid_attributes,
+        requires_grid_meter=True,
+    ),
+    MyLightSensorEntityDescription(
+        key="grid_import_power",
+        translation_key="grid_import_power",
+        native_unit_of_measurement=UnitOfPower.WATT,
+        device_class=SensorDeviceClass.POWER,
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=0,
+        value_fn=lambda data: _grid_value(data, "import"),
+        attributes_fn=_grid_attributes,
+        requires_grid_meter=True,
+    ),
+    MyLightSensorEntityDescription(
+        key="grid_export_power",
+        translation_key="grid_export_power",
+        native_unit_of_measurement=UnitOfPower.WATT,
+        device_class=SensorDeviceClass.POWER,
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=0,
+        value_fn=lambda data: _grid_value(data, "export"),
+        attributes_fn=_grid_attributes,
+        requires_grid_meter=True,
+    ),
+    MyLightSensorEntityDescription(
         key="water_heater_power",
         translation_key="water_heater_power",
         native_unit_of_measurement=UnitOfPower.WATT,
@@ -220,6 +273,7 @@ async def async_setup_entry(
     """Configure sensor platform."""
     coordinator = entry.runtime_data
     has_heater_meter = _heater(coordinator.data) is not None
+    has_grid_meter = coordinator.data.grid is not None and coordinator.data.grid.discovery == "found"
     entities: list[SensorEntity] = [
         MyLightSystemsSensor(
             entry_id=entry.entry_id,
@@ -227,7 +281,8 @@ async def async_setup_entry(
             entity_description=entity_description,
         )
         for entity_description in MYLIGHT_SENSORS
-        if has_heater_meter or not entity_description.requires_heater_meter
+        if (has_heater_meter or not entity_description.requires_heater_meter)
+        and (has_grid_meter or not entity_description.requires_grid_meter)
     ]
 
     capacity = entry.data.get(CONF_ELECTRIC_POWER_CAPACITY)
