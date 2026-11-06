@@ -10,7 +10,7 @@ import pytest
 
 from custom_components.mylight_systems.api.client import MyLightApiClient
 from custom_components.mylight_systems.api.const import DEVICES_URL, STATES_URL
-from custom_components.mylight_systems.api.exceptions import CommunicationError, UnauthorizedError
+from custom_components.mylight_systems.api.exceptions import CommunicationError, MyLightSystemsError, UnauthorizedError
 from custom_components.mylight_systems.grid_telemetry import GridData, discover_grid_meter, read_grid_power
 from custom_components.mylight_systems.sensor import _grid_value
 
@@ -19,9 +19,10 @@ METER = {"id": "grid-test", "type": "cmp", "deviceTypeId": "asoka_electric_count
 
 
 def fixture_client(devices, power=-1500, age=0, unit="watt"):
-    client = AsyncMock()
+    """Use the real client so discovery runs through async_get_devices; only HTTP is mocked."""
+    client = MyLightApiClient("https://example.invalid", AsyncMock())
 
-    async def raw(method, path, params):
+    async def raw(method, path, params=None, headers=None):
         assert method == "get"
         if path == DEVICES_URL:
             return {"status": "ok", "devices": devices}
@@ -50,14 +51,14 @@ def fixture_client(devices, power=-1500, age=0, unit="watt"):
             ],
         }
 
-    client.async_raw_request.side_effect = raw
+    client._execute_request = AsyncMock(side_effect=raw)
     return client
 
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("power,imported,exported", [(1500, 1500, 0), (-1500, 0, 1500), (0, 0, 0)])
 async def test_signed_power_and_separate_directions(power, imported, exported):
-    client = fixture_client([METER, {"id": "composite", "type": "gmd"}], power)
+    client = fixture_client([METER, {"id": "composite", "type": "gmd"}, {**METER, "type": "gmd"}], power)
     discovery = await discover_grid_meter(client, "fixture-token", NOW)
     grid = await read_grid_power(client, "fixture-token", NOW, discovery)
     data = SimpleNamespace(grid=grid)
@@ -68,14 +69,15 @@ async def test_signed_power_and_separate_directions(power, imported, exported):
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("devices,status", [([], "not_found"), ([METER, {**METER, "id": "other"}], "ambiguous")])
-async def test_never_guess_or_sum_ambiguous_meters(devices, status):
+@pytest.mark.parametrize("devices", [[], [METER, {**METER, "id": "other"}]])
+async def test_never_guess_or_sum_ambiguous_meters(devices):
     client = fixture_client(devices)
     discovery = await discover_grid_meter(client, "fixture-token", NOW)
-    assert discovery.status == status
+    assert discovery.status == "not_found" and discovery.meter_id is None
     grid = await read_grid_power(client, "fixture-token", NOW, discovery)
     assert _grid_value(SimpleNamespace(grid=grid), "import") is None
-    assert client.async_raw_request.await_count == 1
+    # No states read without a meter.
+    assert client._execute_request.await_count == 1
 
 
 @pytest.mark.asyncio
@@ -91,8 +93,7 @@ async def test_stale_wrong_unit_and_future_are_unknown(age, unit):
 @pytest.mark.asyncio
 async def test_auth_error_propagates_and_missing_power_is_not_zero():
     client = fixture_client([METER])
-    client.async_raw_request.return_value = {"status": "error", "error": "not.authorized"}
-    client.async_raw_request.side_effect = None
+    client._execute_request = AsyncMock(return_value={"status": "error", "error": "not.authorized"})
     with pytest.raises(UnauthorizedError):
         await discover_grid_meter(client, "fixture-token", NOW)
     assert _grid_value(SimpleNamespace(grid=GridData(discovery="found")), "import") is None
@@ -123,3 +124,11 @@ async def test_failed_states_request_is_retried():
         await client.async_get_states("fixture-token")
     assert await client.async_get_states("fixture-token") == {"status": "ok", "deviceStates": []}
     assert client._execute_request.await_count == 2
+
+
+@pytest.mark.asyncio
+async def test_failed_inventory_is_retried_not_cached_as_not_found():
+    client = fixture_client([METER])
+    client._execute_request = AsyncMock(return_value={"status": "error", "error": "server.error"})
+    with pytest.raises(MyLightSystemsError):
+        await discover_grid_meter(client, "fixture-token", NOW)

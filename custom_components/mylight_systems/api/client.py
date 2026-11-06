@@ -22,6 +22,8 @@ from .const import (
     ERR_SWITCH_NOT_ALLOWED,
     ERR_UNDEFINED_EMAIL,
     ERR_UNDEFINED_PASSWORD,
+    GRID_METER_TYPE,
+    GRID_METER_TYPE_ID,
     MEASURES_GROUPING_URL,
     MEASURES_TOTAL_URL,
     PROFILE_URL,
@@ -199,8 +201,11 @@ class MyLightApiClient:
         _validate_response(response, "devices")
         model = InstallationDevices()
         devices = response["devices"]
+        grid_meter_ids: list[str] = []
 
         for device in devices:
+            if device["type"] == GRID_METER_TYPE and device.get("deviceTypeId") == GRID_METER_TYPE_ID:
+                grid_meter_ids.append(device["id"])
             if device["type"] == "vrt":
                 model.virtual_device_id = device["id"]
             if device["type"] == "bat":
@@ -210,6 +215,10 @@ class MyLightApiClient:
                 model.master_report_period = device["reportPeriod"]
             if device["type"] == "sw":
                 model.master_relay_id = device["id"]
+
+        # Zero or several meters: expose nothing rather than guess or sum.
+        if len(grid_meter_ids) == 1:
+            model.grid_meter_id = grid_meter_ids[0]
 
         return model
 

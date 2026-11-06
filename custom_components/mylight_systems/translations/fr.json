@@ -86,8 +86,8 @@
       "electric_power_capacity": { "name": "Puissance souscrite" },
       "water_heater_energy_today": { "name": "Énergie chauffe-eau aujourd'hui" },
       "grid_power": { "name": "Puissance réseau" },
-      "grid_import_power": { "name": "Puissance importée du réseau" },
-      "grid_export_power": { "name": "Puissance injectée au réseau" },
+      "grid_import_power": { "name": "Puissance soutirée du réseau" },
+      "grid_export_power": { "name": "Puissance injectée sur le réseau" },
       "water_heater_power": { "name": "Puissance chauffe-eau" },
       "water_heater_green_play": {
         "name": "Programme GreenPlay chauffe-eau",

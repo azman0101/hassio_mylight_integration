@@ -30,6 +30,7 @@ class DeviceSchema(TypedDict):
 
     id: str
     type: str
+    deviceTypeId: NotRequired[str]
 
 
 class SensorMeasureSchema(TypedDict):
