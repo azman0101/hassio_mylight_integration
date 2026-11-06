@@ -24,7 +24,8 @@
     "error": {
       "auth": "Email ou senha errada.",
       "connection": "Erro na ligação ao servidor.",
-      "unknown": "Erro desconhecido."
+      "unknown": "Erro desconhecido.",
+      "no_virtual_device": "Nenhum dispositivo virtual foi encontrado na sua instalação MyLight, por isso os dados de energia não podem ser lidos."
     },
     "abort": {
       "reauth_successful": "Reautenticação bem-sucedida",

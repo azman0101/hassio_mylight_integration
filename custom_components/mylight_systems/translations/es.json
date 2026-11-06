@@ -24,7 +24,8 @@
     "error": {
       "auth": "El correo electrónico/contraseña es incorrecto.",
       "connection": "No se puede conectar al servidor.",
-      "unknown": "Se produjo un error desconocido."
+      "unknown": "Se produjo un error desconocido.",
+      "no_virtual_device": "No se encontró ningún dispositivo virtual en su instalación MyLight, por lo que no se pueden leer sus datos de energía."
     },
     "abort": {
       "reauth_successful": "Reautenticación exitosa",

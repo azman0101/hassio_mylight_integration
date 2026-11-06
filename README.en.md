@@ -58,7 +58,7 @@ The three new sensors are created only when exactly one dedicated meter of type 
 
 GreenPlay is an enum sensor, not a switch. Its attributes include `green_play_ranges`, `next_command`, `power_measured_at`, `effective_report_period`, `discovery` and `controller_discovery`. An enabled GreenPlay program does not mean the relay is on, and an energized relay does not prove that the heating element is consuming power.
 
-The configured polling interval is unchanged (15 minutes by default). After updating through HACS, restart Home Assistant to load the new code. If discovery was temporarily unavailable during setup, reload the integration once the connection recovers. See the [detailed documentation](docs/WATER_HEATER_READ_ONLY.md) for limits and read-only checks.
+The configured polling interval is unchanged (15 minutes by default). After updating through HACS, restart Home Assistant to load the new code. If discovery was temporarily unavailable during setup, reload the integration once the connection recovers. See the [detailed documentation](docs/WATER_HEATER_READ_ONLY.md) for limits and read-only checks. Before switching between the upstream repository and this fork in HACS, read the [provider switching guide](docs/INSTALL.md).
 
 ### Switches
 

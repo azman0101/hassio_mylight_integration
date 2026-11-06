@@ -58,7 +58,7 @@ Die drei neuen Sensoren werden nur erstellt, wenn beim Einrichten genau ein eige
 
 GreenPlay ist ein Enum-Sensor, kein Schalter. Seine Attribute umfassen `green_play_ranges`, `next_command`, `power_measured_at`, `effective_report_period`, `discovery` und `controller_discovery`. Ein aktiviertes Programm bedeutet nicht, dass das Relais eingeschaltet ist; ein eingeschaltetes Relais beweist keinen Stromverbrauch des Heizelements.
 
-Das eingestellte Abfrageintervall bleibt unverändert (standardmäßig 15 Minuten). Starten Sie Home Assistant nach einem HACS-Update neu. War die Erkennung beim Start vorübergehend nicht verfügbar, laden Sie die Integration nach Wiederherstellung der Verbindung neu. Weitere Grenzen und Leseprüfungen stehen in der [ausführlichen Dokumentation](docs/WATER_HEATER_READ_ONLY.md) auf Englisch.
+Das eingestellte Abfrageintervall bleibt unverändert (standardmäßig 15 Minuten). Starten Sie Home Assistant nach einem HACS-Update neu. War die Erkennung beim Start vorübergehend nicht verfügbar, laden Sie die Integration nach Wiederherstellung der Verbindung neu. Weitere Grenzen und Leseprüfungen stehen in der [ausführlichen Dokumentation](docs/WATER_HEATER_READ_ONLY.md) auf Englisch. Lesen Sie vor einem Wechsel zwischen dem Upstream-Repository und diesem Fork in HACS die [Anleitung zum Anbieterwechsel](docs/INSTALL.md) auf Englisch.
 
 ### Schalter
 

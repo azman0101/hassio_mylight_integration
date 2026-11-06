@@ -58,7 +58,7 @@ Les trois nouveaux capteurs sont créés uniquement si un seul compteur dédié 
 
 Le capteur GreenPlay est un capteur d’état enum, pas un interrupteur. Ses attributs incluent `green_play_ranges`, `next_command`, `power_measured_at`, `effective_report_period`, `discovery` et `controller_discovery`. GreenPlay activé ne signifie pas que le relais est allumé ; un relais allumé ne garantit pas que la résistance chauffe.
 
-La fréquence de collecte configurée reste inchangée (15 minutes par défaut). Après une mise à jour HACS, redémarrez Home Assistant pour charger le nouveau code. Si la découverte était temporairement indisponible au démarrage, rechargez ensuite l’intégration. Voir [la documentation détaillée](docs/WATER_HEATER_READ_ONLY.md) pour les limites et les contrôles de lecture.
+La fréquence de collecte configurée reste inchangée (15 minutes par défaut). Après une mise à jour HACS, redémarrez Home Assistant pour charger le nouveau code. Si la découverte était temporairement indisponible au démarrage, rechargez ensuite l’intégration. Voir [la documentation détaillée](docs/WATER_HEATER_READ_ONLY.md) pour les limites et les contrôles de lecture. Avant de passer du dépôt upstream à ce fork (ou l’inverse) dans HACS, lisez [le guide de changement de fournisseur](docs/INSTALL.md) (en anglais).
 
 ### Interrupteurs
 

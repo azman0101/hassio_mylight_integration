@@ -189,6 +189,25 @@ async def test_user_step__shows_unknown_error_on_unexpected_api_error():
     assert result["errors"] == {"base": "unknown"}
 
 
+@pytest.mark.asyncio
+async def test_user_step__shows_error_when_no_virtual_device():
+    """An inventory without a virtual device must not create an entry that can never work."""
+    handler = make_handler()
+    client = make_mock_client()
+    client.async_get_devices = AsyncMock(
+        return_value=InstallationDevices(master_id="mst1", master_report_period=60, virtual_battery_id="bat1")
+    )
+
+    with (
+        patch("custom_components.mylight_systems.config_flow.async_create_clientsession"),
+        patch("custom_components.mylight_systems.config_flow.MyLightApiClient", return_value=client),
+    ):
+        result = await handler.async_step_user(user_input=VALID_USER_INPUT)
+
+    assert result["type"] == FlowResultType.FORM
+    assert result["errors"] == {"base": "no_virtual_device"}
+
+
 # ---------------------------------------------------------------------------
 # reauth step
 # ---------------------------------------------------------------------------
