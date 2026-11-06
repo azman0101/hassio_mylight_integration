@@ -33,6 +33,10 @@ from .const import (
 )
 
 
+class NoVirtualDeviceError(Exception):
+    """The inventory has no usable virtual device, so no entry can be created."""
+
+
 class MyLightSystemsFlowHandler(ConfigFlow, domain=DOMAIN):
     """Config flow for MyLightSystems."""
 
@@ -62,6 +66,9 @@ class MyLightSystemsFlowHandler(ConfigFlow, domain=DOMAIN):
                 user_profile = await api_client.async_get_profile(login_response.auth_token)
 
                 device_ids = await api_client.async_get_devices(login_response.auth_token)
+                if not device_ids.virtual_device_id:
+                    # Every core sensor reads this device; an entry without it would never work.
+                    raise NoVirtualDeviceError()
 
                 data = {
                     CONF_EMAIL: user_input[CONF_EMAIL],
@@ -81,6 +88,9 @@ class MyLightSystemsFlowHandler(ConfigFlow, domain=DOMAIN):
 
                 self._abort_if_unique_id_configured()
 
+            except NoVirtualDeviceError:
+                LOGGER.warning("No virtual device found in the MyLight installation inventory")
+                _errors["base"] = "no_virtual_device"
             except InvalidCredentialsError as exception:
                 LOGGER.warning(exception)
                 _errors["base"] = "auth"

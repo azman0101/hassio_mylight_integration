@@ -24,7 +24,8 @@
     "error": {
       "auth": "Mauvais email ou mot de passe.",
       "connection": "Impossible de se connecter au serveur.",
-      "unknown": "Une erreur inconnue s'est produite."
+      "unknown": "Une erreur inconnue s'est produite.",
+      "no_virtual_device": "Aucun appareil virtuel n'a été trouvé dans votre installation MyLight : ses données d'énergie ne peuvent pas être lues."
     },
     "abort": {
       "reauth_successful": "Réauthentification réussie",

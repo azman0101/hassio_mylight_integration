@@ -24,7 +24,8 @@
     "error": {
       "auth": "E-Mail/Passwort ist falsch.",
       "connection": "Verbindung zum Server nicht möglich.",
-      "unknown": "Unbekannter Fehler aufgetreten."
+      "unknown": "Unbekannter Fehler aufgetreten.",
+      "no_virtual_device": "In Ihrer MyLight-Installation wurde kein virtuelles Gerät gefunden, daher können die Energiedaten nicht gelesen werden."
     },
     "abort": {
       "reauth_successful": "Erneute Authentifizierung erfolgreich",
