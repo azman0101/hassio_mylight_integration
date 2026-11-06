@@ -201,20 +201,30 @@ class MyLightApiClient:
         _validate_response(response, "devices")
         model = InstallationDevices()
         devices = response["devices"]
+        if not isinstance(devices, list):
+            raise MyLightSystemsError("Unexpected API response: invalid devices")
         grid_meter_ids: list[str] = []
 
         for device in devices:
-            if device["type"] == GRID_METER_TYPE and device.get("deviceTypeId") == GRID_METER_TYPE_ID:
-                grid_meter_ids.append(device["id"])
-            if device["type"] == "vrt":
-                model.virtual_device_id = device["id"]
-            if device["type"] == "bat":
-                model.virtual_battery_id = device["id"]
-            if device["type"] == "mst":
-                model.master_id = device["id"]
-                model.master_report_period = device["reportPeriod"]
-            if device["type"] == "sw":
-                model.master_relay_id = device["id"]
+            # A malformed unrelated entry must not hide a valid grid meter.
+            if not isinstance(device, dict):
+                continue
+            device_id = device.get("id")
+            if not isinstance(device_id, str) or not device_id:
+                continue
+            device_type = device.get("type")
+            if device_type == GRID_METER_TYPE and device.get("deviceTypeId") == GRID_METER_TYPE_ID:
+                grid_meter_ids.append(device_id)
+            if device_type == "vrt":
+                model.virtual_device_id = device_id
+            if device_type == "bat":
+                model.virtual_battery_id = device_id
+            if device_type == "mst":
+                model.master_id = device_id
+                # InstallationDevices already defaults a missing period to 60.
+                model.master_report_period = device.get("reportPeriod")
+            if device_type == "sw":
+                model.master_relay_id = device_id
 
         # Zero or several meters: expose nothing rather than guess or sum.
         if len(grid_meter_ids) == 1:

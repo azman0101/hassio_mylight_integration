@@ -10,7 +10,8 @@ import pytest
 
 from custom_components.mylight_systems.api.client import MyLightApiClient
 from custom_components.mylight_systems.api.const import DEVICES_URL, STATES_URL
-from custom_components.mylight_systems.api.exceptions import CommunicationError, MyLightSystemsError, UnauthorizedError
+from custom_components.mylight_systems.api.exceptions import CommunicationError, UnauthorizedError
+from custom_components.mylight_systems.coordinator import MyLightSystemsDataUpdateCoordinator
 from custom_components.mylight_systems.grid_telemetry import GridData, discover_grid_meter, read_grid_power
 from custom_components.mylight_systems.sensor import _grid_value
 
@@ -128,7 +129,40 @@ async def test_failed_states_request_is_retried():
 
 @pytest.mark.asyncio
 async def test_failed_inventory_is_retried_not_cached_as_not_found():
+    """Exercise the coordinator's actual discovery cache, not only the first failure."""
     client = fixture_client([METER])
-    client._execute_request = AsyncMock(return_value={"status": "error", "error": "server.error"})
-    with pytest.raises(MyLightSystemsError):
-        await discover_grid_meter(client, "fixture-token", NOW)
+    successful_read = client._execute_request.side_effect
+    inventory_reads = 0
+
+    async def fail_once(method, path, params=None, headers=None):
+        nonlocal inventory_reads
+        if path == DEVICES_URL:
+            inventory_reads += 1
+            if inventory_reads == 1:
+                return {"status": "error", "error": "server.error"}
+        return await successful_read(method, path, params, headers)
+
+    client._execute_request.side_effect = fail_once
+    coordinator = SimpleNamespace(client=client, _grid_discovery=None)
+
+    first = await MyLightSystemsDataUpdateCoordinator._async_read_grid(coordinator, "fixture-token", NOW)
+    assert first is None and coordinator._grid_discovery is None
+    recovered = await MyLightSystemsDataUpdateCoordinator._async_read_grid(coordinator, "fixture-token", NOW)
+    assert recovered.discovery == "found" and recovered.power == -1500
+    assert coordinator._grid_discovery.status == "found"
+    assert inventory_reads == 2
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "unrelated",
+    [None, "invalid", {}, {"id": "no-type"}, {**METER, "id": ""}, {**METER, "id": None}, {**METER, "id": 42}],
+)
+async def test_valid_grid_meter_survives_malformed_unrelated_entries(unrelated):
+    """Retain the defensive filtering of the original standalone grid discovery."""
+    client = fixture_client([METER, unrelated])
+    discovery = await discover_grid_meter(client, "fixture-token", NOW)
+    grid = await read_grid_power(client, "fixture-token", NOW, discovery)
+
+    assert discovery.status == "found" and discovery.meter_id == METER["id"]
+    assert grid.power == -1500

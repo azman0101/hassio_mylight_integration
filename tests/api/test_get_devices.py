@@ -144,3 +144,29 @@ async def test_get_devices__should_not_return_grid_meter_id_when_ambiguous(api_c
     response = await api_client.async_get_devices(token)
 
     assert response.grid_meter_id is None
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("devices", [None, {}, "invalid"])
+async def test_get_devices_rejects_non_list_inventory(api_client, aresponses, devices):
+    """Invalid inventory containers are read errors, not a cached empty inventory."""
+    token = "fixture-only"  # noqa: S105
+    mock_get(aresponses, DEFAULT_BASE_URL + DEVICES_URL + f"?authToken={token}", {"status": "ok", "devices": devices})
+
+    with pytest.raises(MyLightSystemsError) as error:
+        await api_client.async_get_devices(token)
+    assert error.value.msg == "Unexpected API response: invalid devices"
+
+
+@pytest.mark.asyncio
+async def test_get_devices_defaults_missing_master_report_period(api_client, aresponses):
+    """A partial master record keeps the established 60-second fallback."""
+    token = "fixture-only"  # noqa: S105
+    master = {"id": "master-fixture", "type": "mst"}
+    mock_get(aresponses, DEFAULT_BASE_URL + DEVICES_URL + f"?authToken={token}", _devices_payload(master, METER))
+
+    response = await api_client.async_get_devices(token)
+
+    assert response.master_id == "master-fixture"
+    assert response.master_report_period == 60
+    assert response.grid_meter_id == "meter-1"
