@@ -101,6 +101,7 @@ async def test_reads_dedicated_meter_and_disabled_empty_program():
     client = client_fixture()
     data = await read_water_heater(client, "test-only-token", NOW)
     assert data.energy.value == 3600000
+    assert data.energy_day == "2026-11-04"
     assert data.power == 2100
     assert data.green_play.enabled is False and data.green_play.ranges == ""
     assert data.measured_at.isoformat() == "2026-11-04T00:29:00+01:00"
@@ -176,6 +177,7 @@ async def test_optional_program_error_preserves_meter_and_auth_errors_propagate(
 async def test_missing_day_is_unknown_not_previous_day_or_zero(groups):
     data = await read_water_heater(client_fixture(energy={"status": "ok", "measures": groups}), "test-only-token", NOW)
     assert data.energy is None
+    assert data.energy_day is None
 
 
 @pytest.mark.asyncio
@@ -374,3 +376,40 @@ async def test_heater_sensors_only_created_for_a_single_meter(discovery, created
     assert "water_heater_energy" in keys
     heater_keys = {"water_heater_power", "water_heater_green_play", "water_heater_energy_today"}
     assert (heater_keys <= keys) is created and (heater_keys & keys == set()) is not created
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "date,expected",
+    [
+        ("2026-11-03T23:00:00Z", "2026-11-04"),
+        ("2026-11-03", None),
+        ("2026-11-05", None),
+    ],
+)
+async def test_daily_energy_day_is_the_validated_local_aggregate_day(date, expected):
+    from custom_components.mylight_systems.coordinator import MyLightSystemsCoordinatorData  # noqa: PLC0415
+    from custom_components.mylight_systems.sensor import MYLIGHT_SENSORS  # noqa: PLC0415
+
+    energy = {
+        "status": "ok",
+        "measures": [{"date": date, "values": [{"type": "energy", "value": 0, "unit": "Ws"}]}],
+    }
+    heater = await read_water_heater(client_fixture(energy=energy), "test-only-token", NOW)
+    data = MyLightSystemsCoordinatorData(*([None] * 11), water_heater=heater)
+    description = next(s for s in MYLIGHT_SENSORS if s.key == "water_heater_energy_today")
+    assert description.attributes_fn(data) == {"energy_day": expected}
+    # A successful read today never relabels yesterday's or tomorrow's group as today's.
+    assert description.value_fn(data) == (0 if expected else None)
+    assert heater.energy_day == expected
+
+
+def test_daily_energy_attributes_clear_when_meter_is_missing():
+    from custom_components.mylight_systems.coordinator import MyLightSystemsCoordinatorData  # noqa: PLC0415
+    from custom_components.mylight_systems.sensor import MYLIGHT_SENSORS  # noqa: PLC0415
+
+    description = next(s for s in MYLIGHT_SENSORS if s.key == "water_heater_energy_today")
+    data = MyLightSystemsCoordinatorData(*([None] * 11))
+    assert description.attributes_fn(data) == {"energy_day": None}
+    old = WaterHeaterData(energy=Measure("energy", 3600, "Ws"), energy_day="2026-11-03")
+    assert description.attributes_fn(data._replace(water_heater=old)) == {"energy_day": None}

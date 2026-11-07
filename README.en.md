@@ -54,7 +54,7 @@ The entity IDs in the table are examples based on sensor keys. Actual Home Assis
 
 The three new sensors are created only when exactly one dedicated meter of type `cmp` or `gmd`, with `deviceTypeId=water_heater`, is found during integration setup. Energy and power come from the meter. The GreenPlay program and next planned command come from the separately identified controlling relay. If that relay is missing or ambiguous, GreenPlay status stays unknown.
 
-`water_heater_energy_today` resets each day in Home Assistant's timezone. The existing cumulative `water_heater_energy` sensor keeps its identifier and meaning. It remains disabled by default and may be unknown if the API does not provide that total. Missing data and stale power readings are not replaced with zero.
+`water_heater_energy_today` resets each day in Home Assistant's timezone. Its `energy_day` attribute identifies the validated local aggregate date; dashboard cards must check this date rather than Home Assistant's reporting time. The existing cumulative `water_heater_energy` sensor keeps its identifier and meaning. It remains disabled by default and may be unknown if the API does not provide that total. Missing data and stale power readings are not replaced with zero.
 
 GreenPlay is an enum sensor, not a switch. Its attributes include `green_play_ranges`, `next_command`, `power_measured_at`, `effective_report_period`, `discovery` and `controller_discovery`. An enabled GreenPlay program does not mean the relay is on, and an energized relay does not prove that the heating element is consuming power.
 

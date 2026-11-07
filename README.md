@@ -54,7 +54,7 @@ Les identifiants du tableau sont des exemples basés sur les clés des capteurs.
 
 Les trois nouveaux capteurs sont créés uniquement si un seul compteur dédié de type `cmp` ou `gmd`, avec `deviceTypeId=water_heater`, est identifié au démarrage de l’intégration. L’énergie et la puissance proviennent du compteur ; le programme GreenPlay et la prochaine commande proviennent du relais de commande identifié séparément. Si le relais est absent ou ambigu, l’état GreenPlay reste inconnu.
 
-`water_heater_energy_today` est remis à zéro chaque jour selon le fuseau Home Assistant. Le compteur cumulatif existant `water_heater_energy` conserve son identifiant et sa signification ; il reste désactivé par défaut et peut être inconnu si l’API ne fournit pas ce total. Une donnée absente ou une puissance périmée ne devient pas artificiellement zéro.
+`water_heater_energy_today` est remis à zéro chaque jour selon le fuseau Home Assistant. Son attribut `energy_day` indique la date locale validée de l’agrégat ; les cartes doivent vérifier cette date plutôt que l’heure de mise à jour dans Home Assistant. Le compteur cumulatif existant `water_heater_energy` conserve son identifiant et sa signification ; il reste désactivé par défaut et peut être inconnu si l’API ne fournit pas ce total. Une donnée absente ou une puissance périmée ne devient pas artificiellement zéro.
 
 Le capteur GreenPlay est un capteur d’état enum, pas un interrupteur. Ses attributs incluent `green_play_ranges`, `next_command`, `power_measured_at`, `effective_report_period`, `discovery` et `controller_discovery`. GreenPlay activé ne signifie pas que le relais est allumé ; un relais allumé ne garantit pas que la résistance chauffe.
 

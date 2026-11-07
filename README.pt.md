@@ -54,7 +54,7 @@ Os IDs de entidade na tabela são exemplos baseados nas chaves dos sensores. Os 
 
 Os três novos sensores só são criados se for encontrado exatamente um contador dedicado do tipo `cmp` ou `gmd`, com `deviceTypeId=water_heater`, ao iniciar a integração. A energia e a potência vêm do contador. O programa GreenPlay e o próximo comando vêm do relé de controlo identificado separadamente. Se o relé estiver ausente ou a identificação for ambígua, o estado GreenPlay permanece desconhecido.
 
-`water_heater_energy_today` reinicia diariamente no fuso horário do Home Assistant. O sensor acumulativo existente `water_heater_energy` mantém o ID e o significado; continua desativado por predefinição e pode estar desconhecido se a API não fornecer esse total. Dados ausentes e leituras de potência antigas não são substituídos por zero.
+`water_heater_energy_today` reinicia diariamente no fuso horário do Home Assistant. O atributo `energy_day` indica a data local validada do total diário; os cartões do painel devem verificar esta data e não a hora de atualização do Home Assistant. O sensor acumulativo existente `water_heater_energy` mantém o ID e o significado; continua desativado por predefinição e pode estar desconhecido se a API não fornecer esse total. Dados ausentes e leituras de potência antigas não são substituídos por zero.
 
 GreenPlay é um sensor enum, não um interruptor. Os atributos incluem `green_play_ranges`, `next_command`, `power_measured_at`, `effective_report_period`, `discovery` e `controller_discovery`. Um programa ativo não significa que o relé esteja ligado; um relé ligado não prova que a resistência esteja a consumir energia.
 

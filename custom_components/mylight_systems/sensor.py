@@ -72,6 +72,13 @@ def _heater_attributes(data: MyLightSystemsCoordinatorData) -> dict:
     }
 
 
+def _heater_energy_attributes(data: MyLightSystemsCoordinatorData) -> dict:
+    """Expose the validated local aggregate date without inventing a measurement time."""
+    heater = _heater(data)
+    # read_water_heater only sets energy_day together with a validated energy value.
+    return {"energy_day": heater.energy_day if heater is not None else None}
+
+
 def _grid_value(data: MyLightSystemsCoordinatorData, direction: str) -> float | None:
     """Keep zero import/export distinct from missing signed power."""
     grid = data.grid
@@ -250,6 +257,7 @@ MYLIGHT_SENSORS: tuple[MyLightSensorEntityDescription, ...] = (
         device_class=SensorDeviceClass.ENERGY,
         suggested_display_precision=2,
         value_fn=lambda data: ws_to_wh(h.energy.value) if (h := _heater(data)) and h.energy else None,
+        attributes_fn=_heater_energy_attributes,
         requires_heater_meter=True,
     ),
     MyLightSensorEntityDescription(
