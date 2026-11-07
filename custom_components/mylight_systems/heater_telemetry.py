@@ -55,6 +55,7 @@ class WaterHeaterData:
     fetched_at: datetime | None = None
     discovery: str = "not_found"
     controller_discovery: str = "not_found"
+    energy_day: str | None = None
 
 
 def finite_number(value: Any) -> float | None:
@@ -258,6 +259,8 @@ async def read_water_heater(
         _check_auth(result)
     energy, states, schedule = results
     data.energy = parse_day_energy(energy, today.isoformat(), now.tzinfo)
+    # This is the validated aggregate day, not a meter measurement timestamp.
+    data.energy_day = today.isoformat() if data.energy is not None else None
     if isinstance(states, dict) and states.get("status") == "ok":
         device_states = _objects(states.get("deviceStates"))
         matches = [s for s in device_states if s.get("deviceId") == meter_id]

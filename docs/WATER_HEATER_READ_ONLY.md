@@ -112,3 +112,36 @@ and compare them with Solcast decisions simulated at the same time. Keep forecas
 versions available before each decision. Neither schedule ranges nor weather data
 are presented as an accessible numerical GreenPlay PV forecast. No production
 notification or pilot automation is installed by this change.
+
+## Daily-energy dates and dashboard sampling
+
+The daily energy sensor exposes `energy_day` (`YYYY-MM-DD`), the aggregate date
+validated against the API response in Home Assistant's timezone. It is null when
+the requested day's energy is missing, invalid, or the meter is not identified.
+It is **not** the meter's last measurement time or a guarantee of complete
+acquisition. A valid zero is retained.
+
+A dashboard's "consumed today" display must compare `energy_day` with today's
+date in Home Assistant's timezone. Do not use `last_updated` or `last_reported`:
+a successful poll or restart can report old data with a new HA timestamp. After
+midnight, an old aggregate date should display N/A until today's data arrives.
+Do not substitute zero, yesterday's value, or a power timestamp.
+
+For the optional NVR comparison card, a reviewable patch is provided in
+[examples/heater-card-freshness.patch](examples/heater-card-freshness.patch).
+Apply it only to the matching custom card after installing the integration
+change; it is not deployed by HACS. Older integration versions without
+`energy_day` deliberately display N/A in the patched card.
+
+Power charts contain sampled observations, normally polled every 15 minutes.
+Use a label such as **Measured power — sampled readings**, show observation
+markers, and state that connecting segments are a visual aid, not continuous
+measurement. Keep unknown values as gaps. For example, annotate a stepped chart:
+
+> Points are sampled measurements. Steps between points do not prove that power
+> remained constant. Short heater cycles or grid-import spikes may be missed.
+
+Do not integrate those sparse points to claim exact heater energy or savings.
+Use the dedicated daily energy total for energy, subject to acquisition coverage.
+This change does not repair historical statistics or alter entity mappings,
+polling, relay controls, or Energy dashboard settings.
