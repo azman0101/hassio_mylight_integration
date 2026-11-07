@@ -100,3 +100,73 @@ async def test_get_devices__should_return_device_data_when_valid_token(api_clien
     assert 300 == response.master_report_period
     assert "qVGSJ45vkeqvrHy6g" == response.virtual_device_id
     assert "ZEdtSVQKto8T53RWa_msb" == response.virtual_battery_id
+
+
+def _devices_payload(*devices):
+    return {"status": "ok", "devices": list(devices)}
+
+
+METER = {"id": "meter-1", "type": "cmp", "deviceTypeId": "asoka_electric_counter"}
+
+
+@pytest.mark.asyncio
+async def test_get_devices__should_return_grid_meter_id_when_single_meter(api_client, aresponses):
+    """A single cmp/asoka_electric_counter device is the grid meter."""
+    token = "abcdef"  # noqa: S105
+    other = {"id": "heater", "type": "cmp", "deviceTypeId": "water_heater"}
+    mock_get(aresponses, DEFAULT_BASE_URL + DEVICES_URL + f"?authToken={token}", _devices_payload(other, METER))
+
+    response = await api_client.async_get_devices(token)
+
+    assert "meter-1" == response.grid_meter_id
+
+
+@pytest.mark.asyncio
+async def test_get_devices__should_not_return_grid_meter_id_when_no_meter(
+    api_client, aresponses, valid_response_fixture
+):
+    """No matching device means no grid meter."""
+    token = "abcdef"  # noqa: S105
+    mock_get(aresponses, DEFAULT_BASE_URL + DEVICES_URL + f"?authToken={token}", valid_response_fixture)
+
+    response = await api_client.async_get_devices(token)
+
+    assert response.grid_meter_id is None
+
+
+@pytest.mark.asyncio
+async def test_get_devices__should_not_return_grid_meter_id_when_ambiguous(api_client, aresponses):
+    """Several matching devices are never summed or guessed."""
+    token = "abcdef"  # noqa: S105
+    second = {**METER, "id": "meter-2"}
+    mock_get(aresponses, DEFAULT_BASE_URL + DEVICES_URL + f"?authToken={token}", _devices_payload(METER, second))
+
+    response = await api_client.async_get_devices(token)
+
+    assert response.grid_meter_id is None
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("devices", [None, {}, "invalid"])
+async def test_get_devices_rejects_non_list_inventory(api_client, aresponses, devices):
+    """Invalid inventory containers are read errors, not a cached empty inventory."""
+    token = "fixture-only"  # noqa: S105
+    mock_get(aresponses, DEFAULT_BASE_URL + DEVICES_URL + f"?authToken={token}", {"status": "ok", "devices": devices})
+
+    with pytest.raises(MyLightSystemsError) as error:
+        await api_client.async_get_devices(token)
+    assert error.value.msg == "Unexpected API response: invalid devices"
+
+
+@pytest.mark.asyncio
+async def test_get_devices_defaults_missing_master_report_period(api_client, aresponses):
+    """A partial master record keeps the established 60-second fallback."""
+    token = "fixture-only"  # noqa: S105
+    master = {"id": "master-fixture", "type": "mst"}
+    mock_get(aresponses, DEFAULT_BASE_URL + DEVICES_URL + f"?authToken={token}", _devices_payload(master, METER))
+
+    response = await api_client.async_get_devices(token)
+
+    assert response.master_id == "master-fixture"
+    assert response.master_report_period == 60
+    assert response.grid_meter_id == "meter-1"

@@ -29,3 +29,31 @@ with heater and solar power reveals coincidence, not a unique causal allocation
 to the heater: other loads and asynchronous meters also matter.
 
 No relay commands, GreenPlay schedules or Energy-dashboard sources are changed.
+
+## Relation to upstream
+
+Upstream reimplemented these sensors in acesyde/hassio_mylight_integration#177
+(released in upstream 0.11.0) with the same sensor keys, so unique IDs and entity
+IDs are the same in both. This fork follows upstream's structure: the meter rule
+lives in `MyLightApiClient.async_get_devices` (`InstallationDevices.grid_meter_id`,
+`GRID_METER_TYPE`/`GRID_METER_TYPE_ID`), icons come from `icons.json`, and entity
+names use upstream's translations.
+
+This fork keeps stricter reads than upstream: stale or future-dated readings are
+unknown (upstream exposes the last value as is), `W` is accepted as well as
+`watt`, a meter with more than one `electric_power` reading is unknown instead of
+taking the first, one `/api/states` response is shared across concurrent readers,
+the inventory is re-read every 24 hours, and the sensors expose provenance
+attributes.
+
+## Defensive inventory parsing
+
+A valid grid counter remains discoverable when unrelated inventory entries are
+null, malformed, or lack a non-empty string identifier. Invalid meter identifiers
+are ignored before counting candidates. A master without a report period keeps
+the existing 60-second default. A non-list inventory is a read error, not an empty
+installation to cache. A regression test (`tests/test_grid_telemetry.py`) runs the
+coordinator's discovery cache and verifies that a failed discovery is retried and
+recovers on the next update.
+
+See [docs/INSTALL.md](INSTALL.md) before switching between the upstream and this fork in HACS.

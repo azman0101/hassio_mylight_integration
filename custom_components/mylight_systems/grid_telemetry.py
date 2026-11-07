@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from datetime import datetime
 
 from .api.client import MyLightApiClient
-from .api.const import DEVICES_URL, ERR_NOT_AUTHORIZED, STATES_URL
+from .api.const import ERR_NOT_AUTHORIZED, STATES_URL
 from .api.exceptions import MyLightSystemsError, UnauthorizedError
 from .heater_telemetry import finite_number, parse_power
 
@@ -16,7 +16,7 @@ class GridDiscovery:
     """Cached discovery; ambiguous meters must not be silently added together."""
 
     meter_id: str | None
-    status: str
+    status: str  # "found" or "not_found" (none, or several meters that are never summed)
     discovered_at: datetime
 
 
@@ -40,23 +40,15 @@ def _checked(response: object) -> dict:
 
 
 async def discover_grid_meter(client: MyLightApiClient, token: str, now: datetime) -> GridDiscovery:
-    """Find the unique physical grid counter, not the multi-channel composite device."""
-    response = _checked(await client.async_raw_request("get", DEVICES_URL, {"authToken": token}))
-    devices = response.get("devices")
-    if not isinstance(devices, list):
-        raise MyLightSystemsError("Invalid grid inventory")
-    candidates = [
-        d
-        for d in devices
-        if isinstance(d, dict)
-        and d.get("type") == "cmp"
-        and d.get("deviceTypeId") == "asoka_electric_counter"
-        and isinstance(d.get("id"), str)
-        and d["id"]
-    ]
-    if len(candidates) != 1:
-        return GridDiscovery(None, "ambiguous" if candidates else "not_found", now)
-    return GridDiscovery(candidates[0]["id"], "found", now)
+    """Find the unique physical grid counter, not the multi-channel composite device.
+
+    The selection rule (exactly one ``cmp``/``asoka_electric_counter``) lives in
+    ``MyLightApiClient.async_get_devices``, as upstream does it.
+    """
+    devices = await client.async_get_devices(token)
+    if devices.grid_meter_id is None:
+        return GridDiscovery(None, "not_found", now)
+    return GridDiscovery(devices.grid_meter_id, "found", now)
 
 
 async def read_grid_power(client: MyLightApiClient, token: str, now: datetime, discovery: GridDiscovery) -> GridData:

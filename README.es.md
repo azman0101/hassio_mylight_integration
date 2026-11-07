@@ -58,7 +58,7 @@ Los tres sensores nuevos solo se crean si se encuentra exactamente un contador d
 
 GreenPlay es un sensor enum, no un interruptor. Sus atributos incluyen `green_play_ranges`, `next_command`, `power_measured_at`, `effective_report_period`, `discovery` y `controller_discovery`. Un programa activo no significa que el relé esté encendido; un relé encendido no demuestra consumo de la resistencia.
 
-El intervalo de consulta configurado no cambia (15 minutos de forma predeterminada). Reinicie Home Assistant tras actualizar mediante HACS. Si la detección no estaba disponible temporalmente al iniciar, vuelva a cargar la integración cuando se recupere la conexión. Consulte los límites y las comprobaciones de lectura en la [documentación detallada](docs/WATER_HEATER_READ_ONLY.md), en inglés.
+El intervalo de consulta configurado no cambia (15 minutos de forma predeterminada). Reinicie Home Assistant tras actualizar mediante HACS. Si la detección no estaba disponible temporalmente al iniciar, vuelva a cargar la integración cuando se recupere la conexión. Consulte los límites y las comprobaciones de lectura en la [documentación detallada](docs/WATER_HEATER_READ_ONLY.md), en inglés. Antes de cambiar entre el repositorio upstream y este fork en HACS, lea la [guía de cambio de proveedor](docs/INSTALL.md), en inglés.
 
 ### Interruptores
 

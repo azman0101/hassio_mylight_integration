@@ -24,7 +24,8 @@
     "error": {
       "auth": "Email ou senha errada.",
       "connection": "Erro na ligação ao servidor.",
-      "unknown": "Erro desconhecido."
+      "unknown": "Erro desconhecido.",
+      "no_virtual_device": "Nenhum dispositivo virtual foi encontrado na sua instalação MyLight, por isso os dados de energia não podem ser lidos."
     },
     "abort": {
       "reauth_successful": "Reautenticação bem-sucedida",
@@ -87,7 +88,7 @@
       "water_heater_energy_today": { "name": "Energia do aquecedor de água hoje" },
       "grid_power": { "name": "Potência da rede" },
       "grid_import_power": { "name": "Potência importada da rede" },
-      "grid_export_power": { "name": "Potência injetada na rede" },
+      "grid_export_power": { "name": "Potência exportada para a rede" },
       "water_heater_power": { "name": "Potência do aquecedor de água" },
       "water_heater_green_play": {
         "name": "Programa GreenPlay do aquecedor",
