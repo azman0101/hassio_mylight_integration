@@ -75,7 +75,8 @@ def _heater_attributes(data: MyLightSystemsCoordinatorData) -> dict:
 def _heater_energy_attributes(data: MyLightSystemsCoordinatorData) -> dict:
     """Expose the validated local aggregate date without inventing a measurement time."""
     heater = _heater(data)
-    return {"energy_day": heater.energy_day if heater is not None and heater.energy is not None else None}
+    # read_water_heater only sets energy_day together with a validated energy value.
+    return {"energy_day": heater.energy_day if heater is not None else None}
 
 
 def _grid_value(data: MyLightSystemsCoordinatorData, direction: str) -> float | None:

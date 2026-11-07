@@ -127,11 +127,12 @@ a successful poll or restart can report old data with a new HA timestamp. After
 midnight, an old aggregate date should display N/A until today's data arrives.
 Do not substitute zero, yesterday's value, or a power timestamp.
 
-For the optional NVR comparison card, a reviewable patch is provided in
-[examples/heater-card-freshness.patch](examples/heater-card-freshness.patch).
-Apply it only to the matching custom card after installing the integration
-change; it is not deployed by HACS. Older integration versions without
-`energy_day` deliberately display N/A in the patched card.
+Custom cards are not part of this integration or of the HACS download. When
+adapting one, build today's date as `YYYY-MM-DD` in Home Assistant's timezone
+(for example with `Intl.DateTimeFormat('en-CA', {timeZone, year: 'numeric',
+month: '2-digit', day: '2-digit'})`) and compare it with `energy_day` as a plain
+string. With integration versions before 0.12.2, which do not expose
+`energy_day`, such a card displays N/A.
 
 Power charts contain sampled observations, normally polled every 15 minutes.
 Use a label such as **Measured power — sampled readings**, show observation

@@ -387,7 +387,7 @@ async def test_heater_sensors_only_created_for_a_single_meter(discovery, created
         ("2026-11-05", None),
     ],
 )
-async def test_daily_energy_attributes_follow_api_day_not_poll_time(date, expected):
+async def test_daily_energy_day_is_the_validated_local_aggregate_day(date, expected):
     from custom_components.mylight_systems.coordinator import MyLightSystemsCoordinatorData  # noqa: PLC0415
     from custom_components.mylight_systems.sensor import MYLIGHT_SENSORS  # noqa: PLC0415
 
@@ -399,9 +399,9 @@ async def test_daily_energy_attributes_follow_api_day_not_poll_time(date, expect
     data = MyLightSystemsCoordinatorData(*([None] * 11), water_heater=heater)
     description = next(s for s in MYLIGHT_SENSORS if s.key == "water_heater_energy_today")
     assert description.attributes_fn(data) == {"energy_day": expected}
+    # A successful read today never relabels yesterday's or tomorrow's group as today's.
     assert description.value_fn(data) == (0 if expected else None)
-    # Successful API access today does not turn yesterday's total into today's.
-    assert heater.fetched_at == NOW
+    assert heater.energy_day == expected
 
 
 def test_daily_energy_attributes_clear_when_meter_is_missing():

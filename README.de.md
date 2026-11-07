@@ -54,7 +54,7 @@ Die Entitäts-IDs in der Tabelle sind Beispiele anhand der Sensorschlüssel. Die
 
 Die drei neuen Sensoren werden nur erstellt, wenn beim Einrichten genau ein eigener Zähler vom Typ `cmp` oder `gmd` mit `deviceTypeId=water_heater` gefunden wird. Energie und Leistung stammen vom Zähler. GreenPlay-Programm und nächster geplanter Befehl stammen vom getrennt erkannten Steuerrelais. Fehlt dieses oder ist die Zuordnung mehrdeutig, bleibt der GreenPlay-Status unbekannt.
 
-`water_heater_energy_today` beginnt täglich entsprechend der Home-Assistant-Zeitzone neu. Der bestehende kumulative Sensor `water_heater_energy` behält ID und Bedeutung, bleibt standardmäßig deaktiviert und kann unbekannt sein, wenn die API den Gesamtwert nicht liefert. Fehlende Daten und veraltete Leistungswerte werden nicht durch null ersetzt.
+`water_heater_energy_today` beginnt täglich entsprechend der Home-Assistant-Zeitzone neu. Das Attribut `energy_day` gibt das validierte lokale Datum des Tageswerts an; Dashboard-Karten müssen dieses Datum prüfen statt der Aktualisierungszeit in Home Assistant. Der bestehende kumulative Sensor `water_heater_energy` behält ID und Bedeutung, bleibt standardmäßig deaktiviert und kann unbekannt sein, wenn die API den Gesamtwert nicht liefert. Fehlende Daten und veraltete Leistungswerte werden nicht durch null ersetzt.
 
 GreenPlay ist ein Enum-Sensor, kein Schalter. Seine Attribute umfassen `green_play_ranges`, `next_command`, `power_measured_at`, `effective_report_period`, `discovery` und `controller_discovery`. Ein aktiviertes Programm bedeutet nicht, dass das Relais eingeschaltet ist; ein eingeschaltetes Relais beweist keinen Stromverbrauch des Heizelements.
 

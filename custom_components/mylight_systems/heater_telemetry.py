@@ -186,18 +186,33 @@ def _group_day(value: Any, tz: tzinfo | None) -> str | None:
     return parsed.date().isoformat()
 
 
-def parse_day_energy(energy: Any, day: str, tz: tzinfo | None = None) -> Measure | None:
-    """Select the requested local day and reject unknown units or malformed values."""
+def parse_day_energy_entry(energy: Any, day: str, tz: tzinfo | None = None) -> tuple[Measure, str] | None:
+    """Return the requested local day's energy with the local day of the group it came from.
+
+    The day is taken from the matched group, so it stays correct even if the
+    selection rule ever accepts more than one day.
+    """
     if isinstance(energy, dict) and energy.get("status") == "ok":
-        groups = [g for g in _objects(energy.get("measures")) if _group_day(g.get("date"), tz) == day]
+        groups = [
+            (g, group_day)
+            for g in _objects(energy.get("measures"))
+            if (group_day := _group_day(g.get("date"), tz)) == day
+        ]
         if len(groups) == 1:
-            values = [v for v in _objects(groups[0].get("values")) if v.get("type") == "energy"]
+            group, group_day = groups[0]
+            values = [v for v in _objects(group.get("values")) if v.get("type") == "energy"]
             if len(values) == 1:
                 v = values[0]
                 number = finite_number(v.get("value"))
                 if number is not None and number >= 0 and v.get("unit") == "Ws":
-                    return Measure("energy", number, "Ws")
+                    return Measure("energy", number, "Ws"), group_day
     return None
+
+
+def parse_day_energy(energy: Any, day: str, tz: tzinfo | None = None) -> Measure | None:
+    """Select the requested local day and reject unknown units or malformed values."""
+    entry = parse_day_energy_entry(energy, day, tz)
+    return entry[0] if entry is not None else None
 
 
 async def _no_schedule() -> None:
@@ -258,9 +273,10 @@ async def read_water_heater(
             raise result
         _check_auth(result)
     energy, states, schedule = results
-    data.energy = parse_day_energy(energy, today.isoformat(), now.tzinfo)
-    # This is the validated aggregate day, not a meter measurement timestamp.
-    data.energy_day = today.isoformat() if data.energy is not None else None
+    entry = parse_day_energy_entry(energy, today.isoformat(), now.tzinfo)
+    if entry is not None:
+        # The local day of the API aggregate, not a meter measurement timestamp.
+        data.energy, data.energy_day = entry
     if isinstance(states, dict) and states.get("status") == "ok":
         device_states = _objects(states.get("deviceStates"))
         matches = [s for s in device_states if s.get("deviceId") == meter_id]
