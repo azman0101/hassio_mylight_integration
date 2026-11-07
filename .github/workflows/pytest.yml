@@ -36,10 +36,3 @@ jobs:
       - name: 📊 Generate coverage
         run: mise project:coverage
 
-      - name: 📤 Upload coverage to Codecov
-        uses: codecov/codecov-action@v7
-        with:
-          token: ${{ secrets.CODECOV_TOKEN }}
-          name: pytest
-          fail_ci_if_error: true
-          files: coverage.xml
