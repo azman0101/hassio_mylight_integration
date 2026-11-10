@@ -7,6 +7,9 @@ on:
   push:
     branches:
       - "main"
+
+permissions:
+  contents: read
   pull_request:
     branches:
       - "main"
@@ -17,23 +20,23 @@ jobs:
     runs-on: "ubuntu-latest"
     steps:
       - name: 📥 Checkout the repository
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
 
       - name: 🔍 Run hassfest validation
-        uses: "home-assistant/actions/hassfest@master"
+        uses: "home-assistant/actions/hassfest@86d4564712fa02543c808e3a693dd04f9d3f8361" # master 2026-11-10
 
   hacs: # https://github.com/hacs/action
     name: "HACS Validation"
     runs-on: "ubuntu-latest"
     steps:
       - name: 📥 Checkout the repository
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
 
       - name: 🔍 Run HACS validation
-        uses: "hacs/action@main"
+        uses: "hacs/action@1ebf01c408f29afcb6406bd431bc98fd8cbb15aa" # main 2026-11-10
         with:
           category: "integration"
